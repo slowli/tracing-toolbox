@@ -7,12 +7,12 @@ use tracing_core::{
     Event, Field, Level, Metadata,
 };
 
-use std::{borrow::Cow, collections::HashMap, error, fmt, iter};
+use std::{borrow::Cow, error, fmt};
 
 pub type MetadataId = u64;
 pub type RawSpanId = u64;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TracingLevel {
     Error,
@@ -42,26 +42,34 @@ pub enum CallSiteKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct CallSiteData {
+    pub name: Cow<'static, str>,
+    pub target: Cow<'static, str>,
+    pub level: TracingLevel,
+    pub module_path: Option<Cow<'static, str>>,
+    pub file: Option<Cow<'static, str>>,
+    pub line: Option<u32>,
+    pub fields: Vec<Cow<'static, str>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum TracingEvent {
     NewCallSite {
         kind: CallSiteKind,
         id: MetadataId,
-        name: Cow<'static, str>,
-        target: Cow<'static, str>,
-        level: TracingLevel,
-        module_path: Option<Cow<'static, str>>,
-        file: Option<Cow<'static, str>>,
-        line: Option<u32>,
-        fields: Vec<Cow<'static, str>>,
+        #[serde(flatten)]
+        data: CallSiteData,
     },
 
     NewSpan {
         id: RawSpanId,
         parent_id: Option<RawSpanId>,
         metadata_id: MetadataId,
-        values: HashMap<String, TracedValue>,
+        // FIXME: serialize as map
+        values: Vec<(String, TracedValue)>,
     },
     FollowsFrom {
         id: RawSpanId,
@@ -73,15 +81,21 @@ pub enum TracingEvent {
     SpanExited {
         id: RawSpanId,
     },
+    SpanCloned {
+        id: RawSpanId,
+    },
+    SpanDropped {
+        id: RawSpanId,
+    },
     ValuesRecorded {
         id: RawSpanId,
-        values: HashMap<String, TracedValue>,
+        values: Vec<(String, TracedValue)>,
     },
 
     NewEvent {
         metadata_id: MetadataId,
         parent: Option<RawSpanId>,
-        values: HashMap<String, TracedValue>,
+        values: Vec<(String, TracedValue)>,
     },
 }
 
@@ -89,13 +103,29 @@ pub enum TracingEvent {
 #[non_exhaustive]
 pub struct TracedError {
     pub message: String,
+    pub source: Option<Box<TracedError>>,
 }
 
 impl TracedError {
     fn new(err: &(dyn error::Error + 'static)) -> Self {
         Self {
             message: err.to_string(),
+            source: err.source().map(|source| Box::new(Self::new(source))),
         }
+    }
+}
+
+impl fmt::Display for TracedError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl error::Error for TracedError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        self.source
+            .as_ref()
+            .map(|source| source.as_ref() as &(dyn error::Error + 'static))
     }
 }
 
@@ -108,7 +138,7 @@ pub enum TracedValue {
     FloatingPoint(f64),
     String(String),
     Object(String),
-    Error(Vec<TracedError>),
+    Error(TracedError),
 }
 
 impl From<bool> for TracedValue {
@@ -159,10 +189,7 @@ impl TracedValue {
     }
 
     fn error(err: &(dyn error::Error + 'static)) -> Self {
-        let error_chain = iter::successors(Some(err), |err| err.source())
-            .map(TracedError::new)
-            .collect();
-        Self::Error(error_chain)
+        Self::Error(TracedError::new(err))
     }
 }
 
@@ -182,13 +209,15 @@ impl TracingEvent {
         Self::NewCallSite {
             kind,
             id,
-            name: Cow::Borrowed(metadata.name()),
-            target: Cow::Borrowed(metadata.target()),
-            level: TracingLevel::new(metadata.level()),
-            module_path: metadata.module_path().map(Cow::Borrowed),
-            file: metadata.file().map(Cow::Borrowed),
-            line: metadata.line(),
-            fields: fields.collect(),
+            data: CallSiteData {
+                name: Cow::Borrowed(metadata.name()),
+                target: Cow::Borrowed(metadata.target()),
+                level: TracingLevel::new(metadata.level()),
+                module_path: metadata.module_path().map(Cow::Borrowed),
+                file: metadata.file().map(Cow::Borrowed),
+                line: metadata.line(),
+                fields: fields.collect(),
+            },
         }
     }
 
@@ -225,45 +254,45 @@ impl TracingEvent {
 
 #[derive(Debug, Default)]
 struct ValueVisitor {
-    values: HashMap<String, TracedValue>,
+    values: Vec<(String, TracedValue)>,
 }
 
 impl Visit for ValueVisitor {
     fn record_f64(&mut self, field: &Field, value: f64) {
-        self.values.insert(field.name().to_owned(), value.into());
+        self.values.push((field.name().to_owned(), value.into()));
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.values.insert(field.name().to_owned(), value.into());
+        self.values.push((field.name().to_owned(), value.into()));
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
-        self.values.insert(field.name().to_owned(), value.into());
+        self.values.push((field.name().to_owned(), value.into()));
     }
 
     fn record_i128(&mut self, field: &Field, value: i128) {
-        self.values.insert(field.name().to_owned(), value.into());
+        self.values.push((field.name().to_owned(), value.into()));
     }
 
     fn record_u128(&mut self, field: &Field, value: u128) {
-        self.values.insert(field.name().to_owned(), value.into());
+        self.values.push((field.name().to_owned(), value.into()));
     }
 
     fn record_bool(&mut self, field: &Field, value: bool) {
-        self.values.insert(field.name().to_owned(), value.into());
+        self.values.push((field.name().to_owned(), value.into()));
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.values.insert(field.name().to_owned(), value.into());
+        self.values.push((field.name().to_owned(), value.into()));
     }
 
     fn record_error(&mut self, field: &Field, value: &(dyn error::Error + 'static)) {
         self.values
-            .insert(field.name().to_owned(), TracedValue::error(value));
+            .push((field.name().to_owned(), TracedValue::error(value)));
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         self.values
-            .insert(field.name().to_owned(), TracedValue::debug(value));
+            .push((field.name().to_owned(), TracedValue::debug(value)));
     }
 }

@@ -28,6 +28,7 @@ impl Inner {
         let site_id = metadata.callsite();
         debug_assert!(self.call_sites.get(&site_id).is_none());
         let metadata_id = self.next_metadata_id;
+        self.next_metadata_id += 1;
         self.call_sites.insert(site_id, metadata_id);
         metadata_id
     }
@@ -106,5 +107,19 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for EmittingSubscriber<F> {
         self.emit(TracingEvent::SpanExited {
             id: span.into_u64(),
         });
+    }
+
+    fn clone_span(&self, span: &Id) -> Id {
+        self.emit(TracingEvent::SpanCloned {
+            id: span.into_u64(),
+        });
+        span.clone()
+    }
+
+    fn try_close(&self, span: Id) -> bool {
+        self.emit(TracingEvent::SpanDropped {
+            id: span.into_u64(),
+        });
+        false
     }
 }
