@@ -103,7 +103,7 @@ impl Arena {
         Box::leak(fields)
     }
 
-    fn leak_metadata(&self, kind: CallSiteKind, data: CallSiteData) -> &'static Metadata<'static> {
+    fn leak_metadata(&self, data: CallSiteData) -> &'static Metadata<'static> {
         let call_site = Self::new_call_site();
         let call_site_id = tracing_core::identify_callsite!(call_site);
         let fields = FieldSet::new(self.leak_fields(data.fields), call_site_id);
@@ -115,7 +115,7 @@ impl Arena {
             data.line,
             data.module_path.map(|path| self.alloc_string(path)),
             fields,
-            kind.into(),
+            data.kind.into(),
         );
 
         let metadata = Box::leak(Box::new(metadata)) as &_;
@@ -131,17 +131,13 @@ impl Arena {
         self.metadata.write().unwrap()
     }
 
-    pub(crate) fn alloc_metadata(
-        &self,
-        kind: CallSiteKind,
-        data: CallSiteData,
-    ) -> &'static Metadata<'static> {
-        let hash_value = Self::hash_metadata(kind, &data);
+    pub(crate) fn alloc_metadata(&self, data: CallSiteData) -> &'static Metadata<'static> {
+        let hash_value = Self::hash_metadata(&data);
         let scanned_bucket_len = {
             let lock = self.lock_metadata();
             if let Some(bucket) = lock.get(&hash_value) {
                 for &metadata in bucket {
-                    if Self::eq_metadata(kind, &data, metadata) {
+                    if Self::eq_metadata(&data, metadata) {
                         return metadata;
                     }
                 }
@@ -154,39 +150,36 @@ impl Arena {
         let mut lock = self.lock_metadata_mut();
         let bucket = lock.entry(hash_value).or_default();
         for &metadata in &bucket[scanned_bucket_len..] {
-            if Self::eq_metadata(kind, &data, metadata) {
+            if Self::eq_metadata(&data, metadata) {
                 return metadata;
             }
         }
 
         // Finally, we need to actually leak metadata.
-        let metadata = self.leak_metadata(kind, data);
+        let metadata = self.leak_metadata(data);
         bucket.push(metadata);
         metadata
     }
 
     // The returned hash doesn't necessarily match the hash of `Metadata`, but it is the same
     // for the equivalent `(kind, data)` tuples, which is what we need.
-    fn hash_metadata(kind: CallSiteKind, data: &CallSiteData) -> u64 {
-        #[derive(Hash)]
-        struct Container<'a> {
-            kind: CallSiteKind,
-            data: &'a CallSiteData,
-        }
-
+    fn hash_metadata(data: &CallSiteData) -> u64 {
         let mut hasher = DefaultHasher::new();
-        Container { kind, data }.hash(&mut hasher);
+        data.hash(&mut hasher);
         hasher.finish()
     }
 
-    fn eq_metadata(kind: CallSiteKind, data: &CallSiteData, metadata: &Metadata<'_>) -> bool {
-        matches!(kind, CallSiteKind::Span) == metadata.is_span()
+    fn eq_metadata(data: &CallSiteData, metadata: &Metadata<'_>) -> bool {
+        // number comparisons go first
+        matches!(data.kind, CallSiteKind::Span) == metadata.is_span()
+            && Level::from(data.level) == *metadata.level()
+            && data.line == metadata.line()
+            // ...then, string comparisons
             && data.name == metadata.name()
             && data.target == metadata.target()
-            && Level::from(data.level) == *metadata.level()
             && data.module_path.as_ref().map(Cow::as_ref) == metadata.module_path()
             && data.file.as_ref().map(Cow::as_ref) == metadata.file()
-            && data.line == metadata.line()
+            // ...and finally, comparison of fields
             && data
                 .fields
                 .iter()

@@ -111,17 +111,13 @@ fn call_sites_for_tracing_events() {
     let events = Lazy::force(&EVENTS);
 
     let fields_by_span = events.iter().filter_map(|event| {
-        if let TracingEvent::NewCallSite {
-            kind: CallSiteKind::Span,
-            data,
-            ..
-        } = event
-        {
-            let fields: Vec<_> = data.fields.iter().map(Cow::as_ref).collect();
-            Some((data.name.as_ref(), fields))
-        } else {
-            None
+        if let TracingEvent::NewCallSite { data, .. } = event {
+            if matches!(data.kind, CallSiteKind::Span) {
+                let fields: Vec<_> = data.fields.iter().map(Cow::as_ref).collect();
+                return Some((data.name.as_ref(), fields));
+            }
         }
+        None
     });
     let fields_by_span: HashMap<_, _> = fields_by_span.collect();
     assert_eq!(fields_by_span.len(), 2);
@@ -132,17 +128,13 @@ fn call_sites_for_tracing_events() {
     let event_call_sites: Vec<_> = events
         .iter()
         .filter_map(|event| {
-            if let TracingEvent::NewCallSite {
-                id,
-                kind: CallSiteKind::Event,
-                data,
-            } = event
-            {
+            if let TracingEvent::NewCallSite { id, data } = event {
                 assert!(known_metadata_ids.insert(*id));
-                Some(data)
-            } else {
-                None
+                if matches!(data.kind, CallSiteKind::Event) {
+                    return Some(data);
+                }
             }
+            None
         })
         .collect();
 
@@ -166,13 +158,8 @@ fn event_fields_have_same_order() {
     let events = Lazy::force(&EVENTS);
 
     let debug_metadata_id = events.iter().find_map(|event| {
-        if let TracingEvent::NewCallSite {
-            id,
-            kind: CallSiteKind::Event,
-            data,
-        } = event
-        {
-            if data.level == TracingLevel::Debug {
+        if let TracingEvent::NewCallSite { id, data } = event {
+            if matches!(data.kind, CallSiteKind::Event) && data.level == TracingLevel::Debug {
                 return Some(*id);
             }
         }

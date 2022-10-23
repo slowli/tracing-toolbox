@@ -44,6 +44,7 @@ pub enum CallSiteKind {
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct CallSiteData {
+    pub kind: CallSiteKind,
     pub name: Cow<'static, str>,
     pub target: Cow<'static, str>,
     pub level: TracingLevel,
@@ -53,12 +54,37 @@ pub struct CallSiteData {
     pub fields: Vec<Cow<'static, str>>,
 }
 
+impl CallSiteData {
+    pub(crate) fn new(metadata: &'static Metadata<'static>) -> Self {
+        let kind = if metadata.is_span() {
+            CallSiteKind::Span
+        } else {
+            debug_assert!(metadata.is_event());
+            CallSiteKind::Event
+        };
+        let fields = metadata
+            .fields()
+            .iter()
+            .map(|field| Cow::Borrowed(field.name()));
+
+        Self {
+            kind,
+            name: Cow::Borrowed(metadata.name()),
+            target: Cow::Borrowed(metadata.target()),
+            level: TracingLevel::new(metadata.level()),
+            module_path: metadata.module_path().map(Cow::Borrowed),
+            file: metadata.file().map(Cow::Borrowed),
+            line: metadata.line(),
+            fields: fields.collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum TracingEvent {
     NewCallSite {
-        kind: CallSiteKind,
         id: MetadataId,
         #[serde(flatten)]
         data: CallSiteData,
@@ -194,33 +220,6 @@ impl TracedValue {
 }
 
 impl TracingEvent {
-    pub(crate) fn new_call_site(metadata: &'static Metadata<'static>, id: MetadataId) -> Self {
-        let kind = if metadata.is_span() {
-            CallSiteKind::Span
-        } else {
-            debug_assert!(metadata.is_event());
-            CallSiteKind::Event
-        };
-        let fields = metadata
-            .fields()
-            .iter()
-            .map(|field| Cow::Borrowed(field.name()));
-
-        Self::NewCallSite {
-            kind,
-            id,
-            data: CallSiteData {
-                name: Cow::Borrowed(metadata.name()),
-                target: Cow::Borrowed(metadata.target()),
-                level: TracingLevel::new(metadata.level()),
-                module_path: metadata.module_path().map(Cow::Borrowed),
-                file: metadata.file().map(Cow::Borrowed),
-                line: metadata.line(),
-                fields: fields.collect(),
-            },
-        }
-    }
-
     pub(crate) fn new_span(span: &Attributes<'_>, metadata_id: MetadataId, id: RawSpanId) -> Self {
         let mut visitor = ValueVisitor::default();
         span.record(&mut visitor);

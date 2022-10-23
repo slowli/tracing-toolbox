@@ -15,7 +15,7 @@ use std::{
     },
 };
 
-use crate::types::{MetadataId, TracingEvent};
+use crate::types::{CallSiteData, MetadataId, TracingEvent};
 
 #[derive(Debug, Default)]
 struct Inner {
@@ -66,7 +66,10 @@ impl<F: Fn(TracingEvent) + 'static> EmittingSubscriber<F> {
 impl<F: Fn(TracingEvent) + 'static> Subscriber for EmittingSubscriber<F> {
     fn register_callsite(&self, metadata: &'static Metadata<'static>) -> Interest {
         let metadata_id = self.lock_write().register_site(metadata);
-        self.emit(TracingEvent::new_call_site(metadata, metadata_id));
+        self.emit(TracingEvent::NewCallSite {
+            id: metadata_id,
+            data: CallSiteData::new(metadata),
+        });
         Interest::always()
     }
 

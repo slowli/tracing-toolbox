@@ -106,12 +106,18 @@ impl EventConsumer {
         }
     }
 
+    fn on_new_call_site(&mut self, id: MetadataId, data: CallSiteData, register: bool) {
+        let metadata = ARENA.alloc_metadata(data);
+        self.metadata.insert(id, metadata);
+        if register {
+            dispatcher::get_default(|dispatch| dispatch.register_callsite(metadata));
+        }
+    }
+
     pub fn consume_event(&mut self, event: TracingEvent) {
         match event {
-            TracingEvent::NewCallSite { kind, id, data } => {
-                let metadata = ARENA.alloc_metadata(kind, data);
-                self.metadata.insert(id, metadata);
-                dispatcher::get_default(|dispatch| dispatch.register_callsite(metadata));
+            TracingEvent::NewCallSite { id, data } => {
+                self.on_new_call_site(id, data, true);
             }
 
             TracingEvent::NewSpan {
