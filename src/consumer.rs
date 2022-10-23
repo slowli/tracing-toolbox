@@ -1,37 +1,15 @@
 //! `TracingEvent` consumer.
 
-use once_cell::sync::OnceCell;
 use tracing_core::{
     dispatcher,
     field::{FieldSet, Value, ValueSet},
     span::{Attributes, Id, Record},
-    Callsite, Event, Field, Interest, Kind, Level, Metadata,
+    Event, Field, Metadata,
 };
 
-use std::{borrow::Cow, collections::HashMap, error, fmt};
+use std::{collections::HashMap, error, fmt};
 
-use crate::{CallSiteKind, MetadataId, RawSpanId, TracedValue, TracingEvent, TracingLevel};
-
-impl From<TracingLevel> for Level {
-    fn from(level: TracingLevel) -> Self {
-        match level {
-            TracingLevel::Error => Self::ERROR,
-            TracingLevel::Warn => Self::WARN,
-            TracingLevel::Info => Self::INFO,
-            TracingLevel::Debug => Self::DEBUG,
-            TracingLevel::Trace => Self::TRACE,
-        }
-    }
-}
-
-impl From<CallSiteKind> for Kind {
-    fn from(kind: CallSiteKind) -> Self {
-        match kind {
-            CallSiteKind::Span => Self::SPAN,
-            CallSiteKind::Event => Self::EVENT,
-        }
-    }
-}
+use crate::{arena::ARENA, MetadataId, RawSpanId, TracedValue, TracingEvent};
 
 enum CowValue<'a> {
     Borrowed(&'a dyn Value),
@@ -72,24 +50,6 @@ impl TracedValue {
     }
 }
 
-#[derive(Debug, Default)]
-struct DynamicCallSite {
-    metadata: OnceCell<&'static Metadata<'static>>,
-}
-
-impl Callsite for DynamicCallSite {
-    fn set_interest(&self, _interest: Interest) {
-        // Does nothing
-    }
-
-    fn metadata(&self) -> &Metadata<'_> {
-        self.metadata
-            .get()
-            .copied()
-            .expect("metadata not initialized")
-    }
-}
-
 #[derive(Debug)]
 struct SpanInfo {
     local_id: Id,
@@ -104,40 +64,12 @@ pub struct EventConsumer {
 }
 
 impl EventConsumer {
-    fn insert_metadata(
-        &mut self,
-        id: MetadataId,
-        metadata: Metadata<'static>,
-    ) -> &'static Metadata<'static> {
-        let metadata = Box::leak(Box::new(metadata)) as &'static _;
-        self.metadata.insert(id, metadata);
-        metadata
-    }
-
     fn metadata(&self, id: MetadataId) -> &'static Metadata<'static> {
         self.metadata[&id]
     }
 
     fn map_span_id(&self, remote_id: RawSpanId) -> &Id {
         &self.span_info[&remote_id].local_id
-    }
-
-    // FIXME: use arena to deduplicate
-    fn leak(s: Cow<'static, str>) -> &'static str {
-        match s {
-            Cow::Borrowed(s) => s,
-            Cow::Owned(string) => Box::leak(string.into_boxed_str()),
-        }
-    }
-
-    fn leak_fields(fields: Vec<Cow<'static, str>>) -> &'static [&'static str] {
-        let fields: Box<[_]> = fields.into_iter().map(Self::leak).collect();
-        Box::leak(fields)
-    }
-
-    fn new_call_site() -> &'static DynamicCallSite {
-        let call_site = Box::new(DynamicCallSite::default());
-        Box::leak(call_site)
     }
 
     fn generate_fields<'a>(
@@ -177,22 +109,8 @@ impl EventConsumer {
     pub fn consume_event(&mut self, event: TracingEvent) {
         match event {
             TracingEvent::NewCallSite { kind, id, data } => {
-                let call_site = Self::new_call_site();
-                let call_site_id = tracing_core::identify_callsite!(call_site);
-                let fields = FieldSet::new(Self::leak_fields(data.fields), call_site_id);
-                let metadata = Metadata::new(
-                    Self::leak(data.name),
-                    Self::leak(data.target),
-                    data.level.into(),
-                    data.file.map(Self::leak),
-                    data.line,
-                    data.module_path.map(Self::leak),
-                    fields,
-                    kind.into(),
-                );
-                let metadata = self.insert_metadata(id, metadata);
-                call_site.metadata.set(metadata).unwrap();
-
+                let metadata = ARENA.alloc_metadata(kind, data);
+                self.metadata.insert(id, metadata);
                 dispatcher::get_default(|dispatch| dispatch.register_callsite(metadata));
             }
 

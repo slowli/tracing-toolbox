@@ -34,14 +34,14 @@ impl TracingLevel {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CallSiteKind {
     Span,
     Event,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct CallSiteData {
     pub name: Cow<'static, str>,

@@ -1,5 +1,6 @@
 //! Tracing infrastructure for Tardigrade orchestration engine.
 
+mod arena;
 mod consumer;
 mod subscriber;
 mod types;

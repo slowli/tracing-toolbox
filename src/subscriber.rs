@@ -35,7 +35,7 @@ impl Inner {
 }
 
 #[derive(Debug)]
-pub struct EmittingSubscriber<F> {
+pub struct EmittingSubscriber<F = fn(TracingEvent)> {
     inner: RwLock<Inner>,
     next_span_id: AtomicU64,
     on_event: F,
