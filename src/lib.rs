@@ -6,7 +6,7 @@ mod subscriber;
 mod types;
 
 pub use crate::{
-    consumer::EventConsumer,
+    consumer::{EventConsumer, PersistedMetadata, PersistedSpans},
     subscriber::EmittingSubscriber,
     types::{
         CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracedError, TracedValue, TracingEvent,

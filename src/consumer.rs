@@ -1,5 +1,6 @@
 //! `TracingEvent` consumer.
 
+use serde::{Deserialize, Serialize};
 use tracing_core::{
     dispatcher,
     field::{FieldSet, Value, ValueSet},
@@ -9,7 +10,7 @@ use tracing_core::{
 
 use std::{collections::HashMap, error, fmt};
 
-use crate::{arena::ARENA, MetadataId, RawSpanId, TracedValue, TracingEvent};
+use crate::{arena::ARENA, CallSiteData, MetadataId, RawSpanId, TracedValue, TracingEvent};
 
 enum CowValue<'a> {
     Borrowed(&'a dyn Value),
@@ -50,26 +51,96 @@ impl TracedValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct SpanInfo {
+    #[serde(with = "serde_span_id")]
     local_id: Id,
     metadata_id: MetadataId,
     ref_count: usize,
 }
 
+mod serde_span_id {
+    use serde::{
+        de::{Error as DeError, Visitor},
+        Deserializer, Serializer,
+    };
+    use tracing_core::span::Id;
+
+    use std::fmt;
+
+    pub fn serialize<S: Serializer>(id: &Id, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u64(id.into_u64())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Id, D::Error> {
+        struct NumberVisitor;
+
+        impl Visitor<'_> for NumberVisitor {
+            type Value = Id;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("numeric span ID")
+            }
+
+            fn visit_u64<E: DeError>(self, value: u64) -> Result<Self::Value, E> {
+                if value == 0 {
+                    Err(E::custom("span IDs must be positive"))
+                } else {
+                    Ok(Id::from_u64(value))
+                }
+            }
+        }
+
+        deserializer.deserialize_u64(NumberVisitor)
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PersistedMetadata {
+    inner: HashMap<MetadataId, CallSiteData>,
+    /// Was this metadata injected into the `tracing` runtime? This should happen the first
+    /// time the `PersistedMetadata` is used.
+    #[serde(skip, default)]
+    is_injected: bool,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PersistedSpans {
+    inner: HashMap<RawSpanId, SpanInfo>,
+    /// Were these spans injected into the `tracing` runtime? This should happen the first
+    /// time the `PersistedSpans` are used.
+    #[serde(skip, default)]
+    is_injected: bool,
+}
+
 #[derive(Debug, Default)]
 pub struct EventConsumer {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
-    span_info: HashMap<RawSpanId, SpanInfo>,
+    spans: HashMap<RawSpanId, SpanInfo>,
 }
 
 impl EventConsumer {
+    pub fn new(metadata: &mut PersistedMetadata, spans: &mut PersistedSpans) -> Self {
+        let mut this = Self::default();
+
+        for (&id, data) in &metadata.inner {
+            this.on_new_call_site(id, data.clone(), !metadata.is_injected);
+        }
+        metadata.is_injected = true;
+
+        this.spans = spans.inner.clone();
+        spans.is_injected = true; // FIXME: handle span registration
+        this
+    }
+
     fn metadata(&self, id: MetadataId) -> &'static Metadata<'static> {
         self.metadata[&id]
     }
 
     fn map_span_id(&self, remote_id: RawSpanId) -> &Id {
-        &self.span_info[&remote_id].local_id
+        &self.spans[&remote_id].local_id
     }
 
     fn generate_fields<'a>(
@@ -138,7 +209,7 @@ impl EventConsumer {
                 };
 
                 let local_id = dispatcher::get_default(|dispatch| dispatch.new_span(&attributes));
-                self.span_info.insert(
+                self.spans.insert(
                     id,
                     SpanInfo {
                         local_id,
@@ -164,20 +235,20 @@ impl EventConsumer {
                 dispatcher::get_default(|dispatch| dispatch.exit(local_id));
             }
             TracingEvent::SpanCloned { id } => {
-                self.span_info.get_mut(&id).unwrap().ref_count += 1;
+                self.spans.get_mut(&id).unwrap().ref_count += 1;
                 // Dispatcher is intentionally not called: we handle ref counting locally.
             }
             TracingEvent::SpanDropped { id } => {
-                self.span_info.get_mut(&id).unwrap().ref_count -= 1;
-                if self.span_info[&id].ref_count == 0 {
-                    let local_id = self.span_info.remove(&id).unwrap().local_id;
+                self.spans.get_mut(&id).unwrap().ref_count -= 1;
+                if self.spans[&id].ref_count == 0 {
+                    let local_id = self.spans.remove(&id).unwrap().local_id;
                     dispatcher::get_default(|dispatch| dispatch.try_close(local_id.clone()));
                 }
             }
 
             TracingEvent::ValuesRecorded { id, values } => {
                 let local_id = self.map_span_id(id);
-                let metadata = self.metadata(self.span_info[&id].metadata_id);
+                let metadata = self.metadata(self.spans[&id].metadata_id);
                 let values = Self::generate_fields(metadata, &values);
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
@@ -198,6 +269,23 @@ impl EventConsumer {
                 let event = Event::new_child_of(parent, metadata, &values);
                 dispatcher::get_default(|dispatch| dispatch.event(&event));
             }
+        }
+    }
+
+    pub fn persist_metadata(&self, persisted: &mut PersistedMetadata) {
+        assert!(persisted.is_injected, "API misuse");
+        for (&id, &metadata) in &self.metadata {
+            persisted
+                .inner
+                .entry(id)
+                .or_insert_with(|| CallSiteData::new(metadata));
+        }
+    }
+
+    pub fn persist_spans(self) -> PersistedSpans {
+        PersistedSpans {
+            inner: self.spans,
+            is_injected: true,
         }
     }
 }
