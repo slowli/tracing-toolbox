@@ -4,7 +4,7 @@ use assert_matches::assert_matches;
 use insta::assert_yaml_snapshot;
 use once_cell::sync::Lazy;
 use tracing_core::{field, Level, Subscriber};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{layer::SubscriberExt, registry::LookupSpan, FmtSubscriber, Registry};
 
 use std::{
     borrow::Cow,
@@ -14,6 +14,7 @@ use std::{
 };
 
 use tardigrade_tracing::{
+    capture::{CaptureLayer, SharedStorage, Storage},
     CallSiteKind, EmittingSubscriber, EventConsumer, PersistedMetadata, PersistedSpans,
     TracedValue, TracingEvent, TracingLevel,
 };
@@ -41,6 +42,25 @@ fn compute(count: usize) -> Result<u64, Overflow> {
 
 const PHI: f64 = 1.618033988749895; // (1 + sqrt(5)) / 2
 
+fn fib(count: usize) {
+    let span = tracing::info_span!("fib", approx = field::Empty);
+    let _entered = span.enter();
+
+    let approx = PHI.powi(count as i32) / 5.0_f64.sqrt();
+    let approx = approx.round();
+    span.record("approx", approx);
+
+    tracing::warn!(count, "count looks somewhat large");
+    match compute(count) {
+        Ok(result) => {
+            tracing::info!(result, "computed Fibonacci number");
+        }
+        Err(err) => {
+            tracing::error!(error = &err as &dyn error::Error, "computation failed");
+        }
+    }
+}
+
 /// **NB.** Must be called once per program run; otherwise, call sites will be missing
 /// on subsequent runs.
 fn record_events(count: usize) -> Vec<TracingEvent> {
@@ -50,25 +70,7 @@ fn record_events(count: usize) -> Vec<TracingEvent> {
         events_.lock().unwrap().push(event);
     });
 
-    tracing::subscriber::with_default(recorder, || {
-        let span = tracing::info_span!("fib", approx = field::Empty);
-        let _entered = span.enter();
-
-        let approx = PHI.powi(count as i32) / 5.0_f64.sqrt();
-        let approx = approx.round();
-        span.record("approx", approx);
-
-        tracing::warn!(count, "count looks somewhat large");
-        match compute(count) {
-            Ok(result) => {
-                tracing::info!(result, "computed Fibonacci number");
-            }
-            Err(err) => {
-                tracing::error!(error = &err as &dyn error::Error, "computation failed");
-            }
-        }
-    });
-
+    tracing::subscriber::with_default(recorder, || fib(count));
     Arc::try_unwrap(events).unwrap().into_inner().unwrap()
 }
 
@@ -221,7 +223,7 @@ fn event_fields_have_same_order() {
     }
 }
 
-fn create_fmt_subscriber() -> impl Subscriber {
+fn create_fmt_subscriber() -> impl Subscriber + for<'a> LookupSpan<'a> {
     FmtSubscriber::builder()
         .pretty()
         .with_max_level(Level::TRACE)
@@ -280,8 +282,8 @@ fn persisting_spans() {
 
     let mut metadata = PersistedMetadata::default();
     let mut spans = PersistedSpans::default();
-    let mut consumer = EventConsumer::new(&mut metadata, &mut spans);
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
+        let mut consumer = EventConsumer::new(&mut metadata, &mut spans);
         for event in events {
             consumer.consume_event(event.clone());
 
@@ -297,4 +299,42 @@ fn persisting_spans() {
             }
         }
     });
+}
+
+#[test]
+fn capturing_spans_directly() {
+    Lazy::force(&EVENTS); // necessary to not influence the `EmittingSubscriber`
+
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || fib(5));
+
+    assert_captured_spans(&storage.lock());
+}
+
+fn assert_captured_spans(storage: &Storage) {
+    let fib_span = storage
+        .spans()
+        .find(|span| span.metadata().name() == "compute")
+        .unwrap();
+    assert_eq!(fib_span.metadata().target(), "fib");
+    assert_eq!(fib_span.stats().entered, 1);
+    assert!(fib_span.stats().is_closed);
+    assert_matches!(fib_span["count"], TracedValue::UInt(5));
+}
+
+#[test]
+fn capturing_spans_for_replayed_events() {
+    let events = &EVENTS.short;
+
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || {
+        let mut consumer = EventConsumer::default();
+        for event in events {
+            consumer.consume_event(event.clone());
+        }
+    });
+
+    assert_captured_spans(&storage.lock());
 }

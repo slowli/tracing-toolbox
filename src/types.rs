@@ -271,46 +271,52 @@ impl TracingEvent {
 }
 
 #[derive(Debug, Default)]
-struct ValueVisitor {
-    values: Vec<(String, TracedValue)>,
+pub(crate) struct ValueVisitor<S> {
+    values: Vec<(S, TracedValue)>,
 }
 
-impl Visit for ValueVisitor {
+impl<S> ValueVisitor<S> {
+    pub(crate) fn into_inner(self) -> Vec<(S, TracedValue)> {
+        self.values
+    }
+}
+
+impl<S: From<&'static str>> Visit for ValueVisitor<S> {
     fn record_f64(&mut self, field: &Field, value: f64) {
-        self.values.push((field.name().to_owned(), value.into()));
+        self.values.push((field.name().into(), value.into()));
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.values.push((field.name().to_owned(), value.into()));
+        self.values.push((field.name().into(), value.into()));
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
-        self.values.push((field.name().to_owned(), value.into()));
+        self.values.push((field.name().into(), value.into()));
     }
 
     fn record_i128(&mut self, field: &Field, value: i128) {
-        self.values.push((field.name().to_owned(), value.into()));
+        self.values.push((field.name().into(), value.into()));
     }
 
     fn record_u128(&mut self, field: &Field, value: u128) {
-        self.values.push((field.name().to_owned(), value.into()));
+        self.values.push((field.name().into(), value.into()));
     }
 
     fn record_bool(&mut self, field: &Field, value: bool) {
-        self.values.push((field.name().to_owned(), value.into()));
+        self.values.push((field.name().into(), value.into()));
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.values.push((field.name().to_owned(), value.into()));
+        self.values.push((field.name().into(), value.into()));
     }
 
     fn record_error(&mut self, field: &Field, value: &(dyn error::Error + 'static)) {
         self.values
-            .push((field.name().to_owned(), TracedValue::error(value)));
+            .push((field.name().into(), TracedValue::error(value)));
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         self.values
-            .push((field.name().to_owned(), TracedValue::debug(value)));
+            .push((field.name().into(), TracedValue::debug(value)));
     }
 }

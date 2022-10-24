@@ -1,6 +1,7 @@
 //! Tracing infrastructure for Tardigrade orchestration engine.
 
 mod arena;
+pub mod capture;
 mod consumer;
 mod serde_helpers;
 mod subscriber;
