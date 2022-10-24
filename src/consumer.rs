@@ -72,6 +72,12 @@ pub struct PersistedMetadata {
     is_injected: bool,
 }
 
+impl PersistedMetadata {
+    pub fn iter(&self) -> impl Iterator<Item = (MetadataId, &CallSiteData)> + '_ {
+        self.inner.iter().map(|(id, data)| (*id, data))
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersistedSpans {

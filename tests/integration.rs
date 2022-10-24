@@ -1,11 +1,9 @@
 //! Integration tests for Tardigrade tracing infrastructure.
 
-// TODO: test restoring from `PersistedSpans` / `PersistedMetadata`
-
 use assert_matches::assert_matches;
 use insta::assert_yaml_snapshot;
 use once_cell::sync::Lazy;
-use tracing_core::{field, Level};
+use tracing_core::{field, Level, Subscriber};
 use tracing_subscriber::FmtSubscriber;
 
 use std::{
@@ -16,7 +14,8 @@ use std::{
 };
 
 use tardigrade_tracing::{
-    CallSiteKind, EmittingSubscriber, EventConsumer, TracedValue, TracingEvent, TracingLevel,
+    CallSiteKind, EmittingSubscriber, EventConsumer, PersistedMetadata, PersistedSpans,
+    TracedValue, TracingEvent, TracingLevel,
 };
 
 #[derive(Debug)]
@@ -86,7 +85,7 @@ static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
 
 #[test]
 fn event_snapshot() {
-    let mut events = Lazy::force(&EVENTS).short.clone();
+    let mut events = EVENTS.short.clone();
     for event in &mut events {
         if let TracingEvent::NewCallSite { data, .. } = event {
             // Make event data not depend on specific lines, which could easily
@@ -102,7 +101,7 @@ fn event_snapshot() {
 
 #[test]
 fn resource_management_for_tracing_events() {
-    let events = &Lazy::force(&EVENTS).long;
+    let events = &EVENTS.long;
 
     let mut alive_spans = HashSet::new();
     let mut open_spans = vec![];
@@ -137,7 +136,7 @@ fn resource_management_for_tracing_events() {
 
 #[test]
 fn call_sites_for_tracing_events() {
-    let events = &Lazy::force(&EVENTS).long;
+    let events = &EVENTS.long;
 
     let fields_by_span = events.iter().filter_map(|event| {
         if let TracingEvent::NewCallSite { data, .. } = event {
@@ -184,7 +183,7 @@ fn call_sites_for_tracing_events() {
 
 #[test]
 fn event_fields_have_same_order() {
-    let events = &Lazy::force(&EVENTS).long;
+    let events = &EVENTS.long;
 
     let debug_metadata_id = events.iter().find_map(|event| {
         if let TracingEvent::NewCallSite { id, data } = event {
@@ -222,21 +221,80 @@ fn event_fields_have_same_order() {
     }
 }
 
+fn create_fmt_subscriber() -> impl Subscriber {
+    FmtSubscriber::builder()
+        .pretty()
+        .with_max_level(Level::TRACE)
+        .with_test_writer()
+        .finish()
+}
+
 /// This test are mostly about the "expected" output of `FmtSubscriber`.
 /// Their output should be reviewed manually.
 #[test]
 fn reproducing_events_on_fmt_subscriber() {
-    let events = &Lazy::force(&EVENTS).long;
+    let events = &EVENTS.long;
 
-    let subscriber = FmtSubscriber::builder()
-        .pretty()
-        .with_max_level(Level::TRACE)
-        .with_test_writer()
-        .finish();
     let mut consumer = EventConsumer::default();
-    tracing::subscriber::with_default(subscriber, || {
+    tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             consumer.consume_event(event.clone());
+        }
+    });
+}
+
+#[test]
+fn persisting_metadata() {
+    let events = &EVENTS.short;
+
+    let mut persisted = PersistedMetadata::default();
+    let mut consumer = EventConsumer::new(&mut persisted, &mut PersistedSpans::default());
+    tracing::subscriber::with_default(create_fmt_subscriber(), || {
+        for event in events {
+            consumer.consume_event(event.clone());
+        }
+    });
+    consumer.persist_metadata(&mut persisted);
+
+    let names: HashSet<_> = persisted
+        .iter()
+        .map(|(_, data)| data.name.as_ref())
+        .collect();
+    assert!(names.contains("fib"), "{names:?}");
+    assert!(names.contains("compute"), "{names:?}");
+
+    // Check that `consumer` can function after restoring `persisted` meta.
+    let mut consumer = EventConsumer::new(&mut persisted, &mut PersistedSpans::default());
+    tracing::subscriber::with_default(create_fmt_subscriber(), || {
+        for event in events {
+            if !matches!(event, TracingEvent::NewCallSite { .. }) {
+                consumer.consume_event(event.clone());
+            }
+        }
+    });
+}
+
+#[test]
+fn persisting_spans() {
+    let events = &EVENTS.short;
+
+    let mut metadata = PersistedMetadata::default();
+    let mut spans = PersistedSpans::default();
+    let mut consumer = EventConsumer::new(&mut metadata, &mut spans);
+    tracing::subscriber::with_default(create_fmt_subscriber(), || {
+        for event in events {
+            consumer.consume_event(event.clone());
+
+            if matches!(
+                event,
+                TracingEvent::NewSpan { .. } | TracingEvent::SpanExited { .. }
+            ) {
+                // Emulate consumer reset. When the matched events are emitted,
+                // spans should be non-empty.
+                consumer.persist_metadata(&mut metadata);
+                spans = consumer.persist_spans();
+                consumer = EventConsumer::new(&mut metadata, &mut spans);
+            }
         }
     });
 }
