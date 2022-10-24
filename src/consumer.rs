@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use tracing_core::{
-    dispatcher,
+    dispatcher::{self, Dispatch},
     field::{self, FieldSet, Value, ValueSet},
     span::{Attributes, Id, Record},
     Event, Field, Metadata,
@@ -88,10 +88,19 @@ pub struct PersistedSpans {
     is_injected: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct EventConsumer {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
     spans: HashMap<RawSpanId, SpanInfo>,
+}
+
+impl Default for EventConsumer {
+    fn default() -> Self {
+        Self {
+            metadata: HashMap::new(),
+            spans: HashMap::new(),
+        }
+    }
 }
 
 impl EventConsumer {
@@ -106,6 +115,10 @@ impl EventConsumer {
         this.spans = spans.inner.clone();
         spans.is_injected = true; // FIXME: handle span registration
         this
+    }
+
+    fn dispatch<T>(dispatch_fn: impl FnOnce(&Dispatch) -> T) -> T {
+        dispatch_fn(&dispatcher::get_default(Dispatch::clone))
     }
 
     fn metadata(&self, id: MetadataId) -> &'static Metadata<'static> {
@@ -154,7 +167,7 @@ impl EventConsumer {
         let metadata = ARENA.alloc_metadata(data);
         self.metadata.insert(id, metadata);
         if register {
-            dispatcher::get_default(|dispatch| dispatch.register_callsite(metadata));
+            Self::dispatch(|dispatch| dispatch.register_callsite(metadata));
         }
     }
 
@@ -181,7 +194,8 @@ impl EventConsumer {
                     Attributes::new(metadata, &values)
                 };
 
-                let local_id = dispatcher::get_default(|dispatch| dispatch.new_span(&attributes));
+                // If the dispatcher is gone, we'll just stop recording any spans.
+                let local_id = Self::dispatch(|dispatch| dispatch.new_span(&attributes));
                 self.spans.insert(
                     id,
                     SpanInfo {
@@ -195,17 +209,17 @@ impl EventConsumer {
             TracingEvent::FollowsFrom { id, follows_from } => {
                 let local_id = self.map_span_id(id);
                 let local_follows_from = self.map_span_id(follows_from);
-                dispatcher::get_default(|dispatch| {
-                    dispatch.record_follows_from(local_id, local_follows_from)
+                Self::dispatch(|dispatch| {
+                    dispatch.record_follows_from(local_id, local_follows_from);
                 });
             }
             TracingEvent::SpanEntered { id } => {
                 let local_id = self.map_span_id(id);
-                dispatcher::get_default(|dispatch| dispatch.enter(local_id));
+                Self::dispatch(|dispatch| dispatch.enter(local_id));
             }
             TracingEvent::SpanExited { id } => {
                 let local_id = self.map_span_id(id);
-                dispatcher::get_default(|dispatch| dispatch.exit(local_id));
+                Self::dispatch(|dispatch| dispatch.exit(local_id));
             }
             TracingEvent::SpanCloned { id } => {
                 self.spans.get_mut(&id).unwrap().ref_count += 1;
@@ -215,7 +229,7 @@ impl EventConsumer {
                 self.spans.get_mut(&id).unwrap().ref_count -= 1;
                 if self.spans[&id].ref_count == 0 {
                     let local_id = self.spans.remove(&id).unwrap().local_id;
-                    dispatcher::get_default(|dispatch| dispatch.try_close(local_id.clone()));
+                    Self::dispatch(|dispatch| dispatch.try_close(local_id.clone()));
                 }
             }
 
@@ -226,7 +240,7 @@ impl EventConsumer {
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
                 let values = Record::new(&values);
-                dispatcher::get_default(|dispatch| dispatch.record(local_id, &values))
+                Self::dispatch(|dispatch| dispatch.record(local_id, &values));
             }
 
             TracingEvent::NewEvent {
@@ -240,7 +254,7 @@ impl EventConsumer {
                 let values = Self::create_values(metadata.fields(), &values);
                 let parent = parent.map(|id| self.map_span_id(id).clone());
                 let event = Event::new_child_of(parent, metadata, &values);
-                dispatcher::get_default(|dispatch| dispatch.event(&event));
+                Self::dispatch(|dispatch| dispatch.event(&event));
             }
         }
     }
