@@ -1,9 +1,9 @@
 //! Integration tests for Tardigrade tracing infrastructure.
 
-// TODO: snapshot-test event serialization
 // TODO: test restoring from `PersistedSpans` / `PersistedMetadata`
 
 use assert_matches::assert_matches;
+use insta::assert_yaml_snapshot;
 use once_cell::sync::Lazy;
 use tracing_core::{field, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -30,7 +30,7 @@ impl fmt::Display for Overflow {
 
 impl error::Error for Overflow {}
 
-#[tracing::instrument(target = "fib")]
+#[tracing::instrument(target = "fib", ret, err)]
 fn compute(count: usize) -> Result<u64, Overflow> {
     let (mut x, mut y) = (0_u64, 1_u64);
     for i in 0..count {
@@ -52,18 +52,17 @@ fn record_events(count: usize) -> Vec<TracingEvent> {
     });
 
     tracing::subscriber::with_default(recorder, || {
-        let span = tracing::info_span!("fib", result = field::Empty);
+        let span = tracing::info_span!("fib", approx = field::Empty);
         let _entered = span.enter();
 
-        if count > 75 {
-            tracing::warn!(count, "count looks somewhat large");
-        }
+        let approx = PHI.powi(count as i32) / 5.0_f64.sqrt();
+        let approx = approx.round();
+        span.record("approx", approx);
+
+        tracing::warn!(count, "count looks somewhat large");
         match compute(count) {
             Ok(result) => {
-                span.record("result", result);
-                let approx = PHI.powi(count as i32) / 5.0_f64.sqrt();
-                let approx = approx.round();
-                tracing::info!(approx, "computed Fibonacci number");
+                tracing::info!(result, "computed Fibonacci number");
             }
             Err(err) => {
                 tracing::error!(error = &err as &dyn error::Error, "computation failed");
@@ -74,11 +73,36 @@ fn record_events(count: usize) -> Vec<TracingEvent> {
     Arc::try_unwrap(events).unwrap().into_inner().unwrap()
 }
 
-static EVENTS: Lazy<Vec<TracingEvent>> = Lazy::new(|| record_events(80));
+#[derive(Debug)]
+struct RecordedEvents {
+    short: Vec<TracingEvent>,
+    long: Vec<TracingEvent>,
+}
+
+static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
+    short: record_events(5),
+    long: record_events(80),
+});
+
+#[test]
+fn event_snapshot() {
+    let mut events = Lazy::force(&EVENTS).short.clone();
+    for event in &mut events {
+        if let TracingEvent::NewCallSite { data, .. } = event {
+            // Make event data not depend on specific lines, which could easily
+            // change due to refactoring etc.
+            data.line = Some(42);
+            if matches!(data.kind, CallSiteKind::Event) {
+                data.name = Cow::Borrowed("event");
+            }
+        }
+    }
+    assert_yaml_snapshot!("events-fib-5", events);
+}
 
 #[test]
 fn resource_management_for_tracing_events() {
-    let events = Lazy::force(&EVENTS);
+    let events = &Lazy::force(&EVENTS).long;
 
     let mut alive_spans = HashSet::new();
     let mut open_spans = vec![];
@@ -113,7 +137,7 @@ fn resource_management_for_tracing_events() {
 
 #[test]
 fn call_sites_for_tracing_events() {
-    let events = Lazy::force(&EVENTS);
+    let events = &Lazy::force(&EVENTS).long;
 
     let fields_by_span = events.iter().filter_map(|event| {
         if let TracingEvent::NewCallSite { data, .. } = event {
@@ -126,7 +150,7 @@ fn call_sites_for_tracing_events() {
     });
     let fields_by_span: HashMap<_, _> = fields_by_span.collect();
     assert_eq!(fields_by_span.len(), 2);
-    assert_eq!(fields_by_span["fib"], ["result"]);
+    assert_eq!(fields_by_span["fib"], ["approx"]);
     assert_eq!(fields_by_span["compute"], ["count"]);
 
     let mut known_metadata_ids = HashSet::new();
@@ -154,13 +178,13 @@ fn call_sites_for_tracing_events() {
         *call_sites_by_level.entry(site.level).or_default() += 1;
     }
     assert_eq!(call_sites_by_level[&TracingLevel::Warn], 1);
-    assert_eq!(call_sites_by_level[&TracingLevel::Info], 1);
+    assert_eq!(call_sites_by_level[&TracingLevel::Info], 2);
     assert_eq!(call_sites_by_level[&TracingLevel::Debug], 1);
 }
 
 #[test]
 fn event_fields_have_same_order() {
-    let events = Lazy::force(&EVENTS);
+    let events = &Lazy::force(&EVENTS).long;
 
     let debug_metadata_id = events.iter().find_map(|event| {
         if let TracingEvent::NewCallSite { id, data } = event {
@@ -202,7 +226,7 @@ fn event_fields_have_same_order() {
 /// Their output should be reviewed manually.
 #[test]
 fn reproducing_events_on_fmt_subscriber() {
-    let events = Lazy::force(&EVENTS);
+    let events = &Lazy::force(&EVENTS).long;
 
     let subscriber = FmtSubscriber::builder()
         .pretty()

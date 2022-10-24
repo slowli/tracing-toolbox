@@ -1,0 +1,167 @@
+---
+source: crates/tracing/tests/integration.rs
+assertion_line: 101
+expression: events
+---
+- new_call_site:
+    id: 0
+    kind: span
+    name: fib
+    target: integration
+    level: info
+    module_path: integration
+    file: "crates\\tracing\\tests\\integration.rs"
+    line: 42
+    fields:
+      - approx
+- new_span:
+    id: 1
+    metadata_id: 0
+    values: {}
+- span_entered:
+    id: 1
+- values_recorded:
+    id: 1
+    values:
+      approx:
+        floating_point: 5
+- new_call_site:
+    id: 1
+    kind: event
+    name: event
+    target: integration
+    level: warn
+    module_path: integration
+    file: "crates\\tracing\\tests\\integration.rs"
+    line: 42
+    fields:
+      - message
+      - count
+- new_event:
+    metadata_id: 1
+    values:
+      message:
+        object: count looks somewhat large
+      count:
+        u_int: 5
+- new_call_site:
+    id: 2
+    kind: span
+    name: compute
+    target: fib
+    level: info
+    module_path: integration
+    file: "crates\\tracing\\tests\\integration.rs"
+    line: 42
+    fields:
+      - count
+- new_span:
+    id: 2
+    metadata_id: 2
+    values:
+      count:
+        u_int: 5
+- span_entered:
+    id: 2
+- new_call_site:
+    id: 3
+    kind: event
+    name: event
+    target: fib
+    level: debug
+    module_path: integration
+    file: "crates\\tracing\\tests\\integration.rs"
+    line: 42
+    fields:
+      - message
+      - i
+      - current
+- new_event:
+    metadata_id: 3
+    values:
+      message:
+        object: performing iteration
+      i:
+        u_int: 0
+      current:
+        u_int: 0
+- new_event:
+    metadata_id: 3
+    values:
+      message:
+        object: performing iteration
+      i:
+        u_int: 1
+      current:
+        u_int: 1
+- new_event:
+    metadata_id: 3
+    values:
+      message:
+        object: performing iteration
+      i:
+        u_int: 2
+      current:
+        u_int: 1
+- new_event:
+    metadata_id: 3
+    values:
+      message:
+        object: performing iteration
+      i:
+        u_int: 3
+      current:
+        u_int: 2
+- new_event:
+    metadata_id: 3
+    values:
+      message:
+        object: performing iteration
+      i:
+        u_int: 4
+      current:
+        u_int: 3
+- new_call_site:
+    id: 4
+    kind: event
+    name: event
+    target: fib
+    level: info
+    module_path: integration
+    file: "crates\\tracing\\tests\\integration.rs"
+    line: 42
+    fields:
+      - return
+- new_event:
+    metadata_id: 4
+    values:
+      return:
+        object: "5"
+- span_exited:
+    id: 2
+- span_dropped:
+    id: 2
+- new_call_site:
+    id: 5
+    kind: event
+    name: event
+    target: integration
+    level: info
+    module_path: integration
+    file: "crates\\tracing\\tests\\integration.rs"
+    line: 42
+    fields:
+      - message
+      - result
+- new_event:
+    metadata_id: 5
+    values:
+      message:
+        object: computed Fibonacci number
+      result:
+        u_int: 5
+- span_exited:
+    id: 1
+- span_dropped:
+    id: 1
+
