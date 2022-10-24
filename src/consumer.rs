@@ -10,7 +10,9 @@ use tracing_core::{
 
 use std::{collections::HashMap, error, fmt};
 
-use crate::{arena::ARENA, CallSiteData, MetadataId, RawSpanId, TracedValue, TracingEvent};
+use crate::{
+    arena::ARENA, serde_helpers, CallSiteData, MetadataId, RawSpanId, TracedValue, TracingEvent,
+};
 
 enum CowValue<'a> {
     Borrowed(&'a dyn Value),
@@ -54,46 +56,10 @@ impl TracedValue {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SpanInfo {
-    #[serde(with = "serde_span_id")]
+    #[serde(with = "serde_helpers::span_id")]
     local_id: Id,
     metadata_id: MetadataId,
     ref_count: usize,
-}
-
-mod serde_span_id {
-    use serde::{
-        de::{Error as DeError, Visitor},
-        Deserializer, Serializer,
-    };
-    use tracing_core::span::Id;
-
-    use std::fmt;
-
-    pub fn serialize<S: Serializer>(id: &Id, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_u64(id.into_u64())
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Id, D::Error> {
-        struct NumberVisitor;
-
-        impl Visitor<'_> for NumberVisitor {
-            type Value = Id;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str("numeric span ID")
-            }
-
-            fn visit_u64<E: DeError>(self, value: u64) -> Result<Self::Value, E> {
-                if value == 0 {
-                    Err(E::custom("span IDs must be positive"))
-                } else {
-                    Ok(Id::from_u64(value))
-                }
-            }
-        }
-
-        deserializer.deserialize_u64(NumberVisitor)
-    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

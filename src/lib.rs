@@ -2,6 +2,7 @@
 
 mod arena;
 mod consumer;
+mod serde_helpers;
 mod subscriber;
 mod types;
 

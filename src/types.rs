@@ -9,6 +9,8 @@ use tracing_core::{
 
 use std::{borrow::Cow, error, fmt};
 
+use crate::serde_helpers;
+
 pub type MetadataId = u64;
 pub type RawSpanId = u64;
 
@@ -98,7 +100,7 @@ pub enum TracingEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         parent_id: Option<RawSpanId>,
         metadata_id: MetadataId,
-        #[serde(with = "serde_tuples")]
+        #[serde(with = "serde_helpers::tuples")]
         values: Vec<(String, TracedValue)>,
     },
     FollowsFrom {
@@ -119,7 +121,7 @@ pub enum TracingEvent {
     },
     ValuesRecorded {
         id: RawSpanId,
-        #[serde(with = "serde_tuples")]
+        #[serde(with = "serde_helpers::tuples")]
         values: Vec<(String, TracedValue)>,
     },
 
@@ -127,62 +129,9 @@ pub enum TracingEvent {
         metadata_id: MetadataId,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         parent: Option<RawSpanId>,
-        #[serde(with = "serde_tuples")]
+        #[serde(with = "serde_helpers::tuples")]
         values: Vec<(String, TracedValue)>,
     },
-}
-
-mod serde_tuples {
-    use serde::{
-        de::{MapAccess, Visitor},
-        ser::SerializeMap,
-        Deserialize, Deserializer, Serialize, Serializer,
-    };
-
-    use std::{fmt, marker::PhantomData};
-
-    pub fn serialize<S: Serializer, T: Serialize>(
-        tuples: &[(String, T)],
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        let mut map = serializer.serialize_map(Some(tuples.len()))?;
-        for (name, value) in tuples {
-            map.serialize_entry(name, value)?;
-        }
-        map.end()
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
-        deserializer: D,
-    ) -> Result<Vec<(String, T)>, D::Error> {
-        struct MapVisitor<T> {
-            _ty: PhantomData<T>,
-        }
-
-        impl<T> Default for MapVisitor<T> {
-            fn default() -> Self {
-                Self { _ty: PhantomData }
-            }
-        }
-
-        impl<'de, T: Deserialize<'de>> Visitor<'de> for MapVisitor<T> {
-            type Value = Vec<(String, T)>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str("map of name-value pairs")
-            }
-
-            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-                let mut entries = map.size_hint().map_or_else(Vec::new, Vec::with_capacity);
-                while let Some(tuple) = map.next_entry::<String, T>()? {
-                    entries.push(tuple);
-                }
-                Ok(entries)
-            }
-        }
-
-        deserializer.deserialize_map(MapVisitor::<T>::default())
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

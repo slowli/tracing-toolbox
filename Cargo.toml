@@ -17,5 +17,6 @@ tracing-core = "0.1.30"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
+serde_json = "1"
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
