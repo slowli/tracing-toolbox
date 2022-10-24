@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tracing_core::{
     dispatcher,
-    field::{FieldSet, Value, ValueSet},
+    field::{self, FieldSet, Value, ValueSet},
     span::{Attributes, Id, Record},
     Event, Field, Metadata,
 };
@@ -42,7 +42,8 @@ impl TracedValue {
             Self::Int(value) => value,
             Self::UInt(value) => value,
             Self::FloatingPoint(value) => value,
-            Self::String(value) | Self::Object(value) => value,
+            Self::String(value) => value,
+            Self::Object(value) => return CowValue::Owned(Box::new(field::debug(value))),
             Self::Error(err) => {
                 let err = err as &(dyn error::Error + 'static);
                 return CowValue::Owned(Box::new(err));
@@ -273,7 +274,10 @@ impl EventConsumer {
     }
 
     pub fn persist_metadata(&self, persisted: &mut PersistedMetadata) {
-        assert!(persisted.is_injected, "API misuse");
+        assert!(
+            persisted.is_injected,
+            "API misuse; persisted metadata should be previously injected"
+        );
         for (&id, &metadata) in &self.metadata {
             persisted
                 .inner

@@ -48,8 +48,11 @@ pub struct CallSiteData {
     pub name: Cow<'static, str>,
     pub target: Cow<'static, str>,
     pub level: TracingLevel,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub module_path: Option<Cow<'static, str>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file: Option<Cow<'static, str>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
     pub fields: Vec<Cow<'static, str>>,
 }
@@ -92,9 +95,10 @@ pub enum TracingEvent {
 
     NewSpan {
         id: RawSpanId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         parent_id: Option<RawSpanId>,
         metadata_id: MetadataId,
-        // FIXME: serialize as map
+        #[serde(with = "serde_tuples")]
         values: Vec<(String, TracedValue)>,
     },
     FollowsFrom {
@@ -115,14 +119,70 @@ pub enum TracingEvent {
     },
     ValuesRecorded {
         id: RawSpanId,
+        #[serde(with = "serde_tuples")]
         values: Vec<(String, TracedValue)>,
     },
 
     NewEvent {
         metadata_id: MetadataId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         parent: Option<RawSpanId>,
+        #[serde(with = "serde_tuples")]
         values: Vec<(String, TracedValue)>,
     },
+}
+
+mod serde_tuples {
+    use serde::{
+        de::{MapAccess, Visitor},
+        ser::SerializeMap,
+        Deserialize, Deserializer, Serialize, Serializer,
+    };
+
+    use std::{fmt, marker::PhantomData};
+
+    pub fn serialize<S: Serializer, T: Serialize>(
+        tuples: &[(String, T)],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(tuples.len()))?;
+        for (name, value) in tuples {
+            map.serialize_entry(name, value)?;
+        }
+        map.end()
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+        deserializer: D,
+    ) -> Result<Vec<(String, T)>, D::Error> {
+        struct MapVisitor<T> {
+            _ty: PhantomData<T>,
+        }
+
+        impl<T> Default for MapVisitor<T> {
+            fn default() -> Self {
+                Self { _ty: PhantomData }
+            }
+        }
+
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for MapVisitor<T> {
+            type Value = Vec<(String, T)>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("map of name-value pairs")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut entries = map.size_hint().map_or_else(Vec::new, Vec::with_capacity);
+                while let Some(tuple) = map.next_entry::<String, T>()? {
+                    entries.push(tuple);
+                }
+                Ok(entries)
+            }
+        }
+
+        deserializer.deserialize_map(MapVisitor::<T>::default())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,6 +215,16 @@ impl error::Error for TracedError {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DebugObject(String);
+
+impl fmt::Debug for DebugObject {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TracedValue {
@@ -163,7 +233,7 @@ pub enum TracedValue {
     UInt(u128),
     FloatingPoint(f64),
     String(String),
-    Object(String),
+    Object(DebugObject),
     Error(TracedError),
 }
 
@@ -211,7 +281,7 @@ impl From<&str> for TracedValue {
 
 impl TracedValue {
     fn debug(object: &dyn fmt::Debug) -> Self {
-        Self::Object(format!("{object:?}"))
+        Self::Object(DebugObject(format!("{object:?}")))
     }
 
     fn error(err: &(dyn error::Error + 'static)) -> Self {

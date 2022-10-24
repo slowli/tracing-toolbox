@@ -1,3 +1,8 @@
+//! Integration tests for Tardigrade tracing infrastructure.
+
+// TODO: snapshot-test event serialization
+// TODO: test restoring from `PersistedSpans` / `PersistedMetadata`
+
 use assert_matches::assert_matches;
 use once_cell::sync::Lazy;
 use tracing_core::{field, Level};
