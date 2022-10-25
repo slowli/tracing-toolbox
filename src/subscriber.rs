@@ -15,7 +15,39 @@ use std::{
     },
 };
 
-use crate::types::{CallSiteData, MetadataId, TracingEvent};
+use crate::{types::ValueVisitor, CallSiteData, MetadataId, RawSpanId, TracingEvent};
+
+impl TracingEvent {
+    fn new_span(span: &Attributes<'_>, metadata_id: MetadataId, id: RawSpanId) -> Self {
+        let mut visitor = ValueVisitor::default();
+        span.record(&mut visitor);
+        Self::NewSpan {
+            id,
+            parent_id: span.parent().map(Id::into_u64),
+            metadata_id,
+            values: visitor.values,
+        }
+    }
+
+    fn values_recorded(id: RawSpanId, values: &Record<'_>) -> Self {
+        let mut visitor = ValueVisitor::default();
+        values.record(&mut visitor);
+        Self::ValuesRecorded {
+            id,
+            values: visitor.values,
+        }
+    }
+
+    fn new_event(event: &Event<'_>, metadata_id: MetadataId) -> Self {
+        let mut visitor = ValueVisitor::default();
+        event.record(&mut visitor);
+        Self::NewEvent {
+            metadata_id,
+            parent: event.parent().map(Id::into_u64),
+            values: visitor.values,
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 struct Inner {
@@ -68,7 +100,7 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for EmittingSubscriber<F> {
         let metadata_id = self.lock_write().register_site(metadata);
         self.emit(TracingEvent::NewCallSite {
             id: metadata_id,
-            data: CallSiteData::new(metadata),
+            data: CallSiteData::from(metadata),
         });
         Interest::always()
     }

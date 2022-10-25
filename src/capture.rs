@@ -167,7 +167,7 @@ where
         attrs.record(&mut visitor);
         let span = CapturedSpan {
             metadata: attrs.metadata(),
-            values: visitor.into_inner(),
+            values: visitor.values,
             stats: SpanStats::default(),
         };
         let idx = self.lock().push_span(span);
@@ -182,7 +182,7 @@ where
         if let Some(SpanIndex(idx)) = span.extensions().get::<SpanIndex>().copied() {
             let mut visitor = ValueVisitor::default();
             values.record(&mut visitor);
-            self.lock().on_record(idx, visitor.into_inner());
+            self.lock().on_record(idx, visitor.values);
         };
     }
 

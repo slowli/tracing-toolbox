@@ -1,11 +1,7 @@
 //! Types to carry tracing events over the WASM client-host boundary.
 
 use serde::{Deserialize, Serialize};
-use tracing_core::{
-    field::Visit,
-    span::{Attributes, Id, Record},
-    Event, Field, Level, Metadata,
-};
+use tracing_core::{field::Visit, Field, Level, Metadata};
 
 use std::{borrow::Cow, error, fmt};
 
@@ -24,9 +20,9 @@ pub enum TracingLevel {
     Trace,
 }
 
-impl TracingLevel {
-    fn new(level: &Level) -> Self {
-        match *level {
+impl From<Level> for TracingLevel {
+    fn from(level: Level) -> Self {
+        match level {
             Level::ERROR => Self::Error,
             Level::WARN => Self::Warn,
             Level::INFO => Self::Info,
@@ -59,8 +55,8 @@ pub struct CallSiteData {
     pub fields: Vec<Cow<'static, str>>,
 }
 
-impl CallSiteData {
-    pub(crate) fn new(metadata: &'static Metadata<'static>) -> Self {
+impl From<&Metadata<'static>> for CallSiteData {
+    fn from(metadata: &Metadata<'static>) -> Self {
         let kind = if metadata.is_span() {
             CallSiteKind::Span
         } else {
@@ -76,7 +72,7 @@ impl CallSiteData {
             kind,
             name: Cow::Borrowed(metadata.name()),
             target: Cow::Borrowed(metadata.target()),
-            level: TracingLevel::new(metadata.level()),
+            level: TracingLevel::from(*metadata.level()),
             module_path: metadata.module_path().map(Cow::Borrowed),
             file: metadata.file().map(Cow::Borrowed),
             line: metadata.line(),
@@ -343,47 +339,9 @@ impl TracedValue {
     }
 }
 
-impl TracingEvent {
-    pub(crate) fn new_span(span: &Attributes<'_>, metadata_id: MetadataId, id: RawSpanId) -> Self {
-        let mut visitor = ValueVisitor::default();
-        span.record(&mut visitor);
-        Self::NewSpan {
-            id,
-            parent_id: span.parent().map(Id::into_u64),
-            metadata_id,
-            values: visitor.values,
-        }
-    }
-
-    pub(crate) fn values_recorded(id: RawSpanId, values: &Record<'_>) -> Self {
-        let mut visitor = ValueVisitor::default();
-        values.record(&mut visitor);
-        Self::ValuesRecorded {
-            id,
-            values: visitor.values,
-        }
-    }
-
-    pub(crate) fn new_event(event: &Event<'_>, metadata_id: MetadataId) -> Self {
-        let mut visitor = ValueVisitor::default();
-        event.record(&mut visitor);
-        Self::NewEvent {
-            metadata_id,
-            parent: event.parent().map(Id::into_u64),
-            values: visitor.values,
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub(crate) struct ValueVisitor<S> {
-    values: Vec<(S, TracedValue)>,
-}
-
-impl<S> ValueVisitor<S> {
-    pub(crate) fn into_inner(self) -> Vec<(S, TracedValue)> {
-        self.values
-    }
+    pub values: Vec<(S, TracedValue)>,
 }
 
 impl<S: From<&'static str>> Visit for ValueVisitor<S> {

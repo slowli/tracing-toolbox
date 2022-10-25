@@ -10,12 +10,12 @@ use tracing_core::{
 
 use std::{collections::HashMap, error, fmt};
 
+mod arena;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    arena::ARENA, serde_helpers, CallSiteData, MetadataId, RawSpanId, TracedValue, TracingEvent,
-};
+use self::arena::ARENA;
+use crate::{serde_helpers, CallSiteData, MetadataId, RawSpanId, TracedValue, TracingEvent};
 
 enum CowValue<'a> {
     Borrowed(&'a dyn Value),
@@ -336,7 +336,7 @@ impl EventConsumer {
             persisted
                 .inner
                 .entry(id)
-                .or_insert_with(|| CallSiteData::new(metadata));
+                .or_insert_with(|| CallSiteData::from(metadata));
         }
     }
 

@@ -1,5 +1,6 @@
 //! Helpers to (de)serialize some parts of `TracingEvent`s.
 
+#[cfg(feature = "consumer")]
 pub(crate) mod span_id {
     use serde::{
         de::{Error as DeError, Visitor},
