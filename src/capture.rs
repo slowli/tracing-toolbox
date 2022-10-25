@@ -2,7 +2,7 @@
 
 use tracing_core::{
     span::{Attributes, Id, Record},
-    Metadata, Subscriber,
+    LevelFilter, Metadata, Subscriber,
 };
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
@@ -110,15 +110,43 @@ impl SharedStorage {
 struct SpanIndex(usize);
 
 #[derive(Debug)]
+struct SimpleFilter {
+    target: String,
+    level: LevelFilter,
+}
+
+impl SimpleFilter {
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+        metadata.target() == self.target && *metadata.level() <= self.level
+    }
+}
+
+#[derive(Debug)]
 pub struct CaptureLayer {
+    filter: Option<SimpleFilter>,
     storage: Arc<Mutex<Storage>>,
 }
 
 impl CaptureLayer {
     pub fn new(storage: &SharedStorage) -> Self {
         Self {
+            filter: None,
             storage: Arc::clone(&storage.inner),
         }
+    }
+
+    pub fn with_filter(mut self, target: impl Into<String>, level: impl Into<LevelFilter>) -> Self {
+        self.filter = Some(SimpleFilter {
+            target: target.into(),
+            level: level.into(),
+        });
+        self
+    }
+
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+        self.filter
+            .as_ref()
+            .map_or(true, |filter| filter.enabled(metadata))
     }
 
     fn lock(&self) -> impl ops::DerefMut<Target = Storage> + '_ {
@@ -131,6 +159,10 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+        if !self.enabled(attrs.metadata()) {
+            return;
+        }
+
         let mut visitor = ValueVisitor::default();
         attrs.record(&mut visitor);
         let span = CapturedSpan {
