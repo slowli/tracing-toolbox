@@ -65,38 +65,63 @@ struct SpanInfo {
     ref_count: usize,
 }
 
+/// Information about span / event [`Metadata`] that is [serializable] and thus
+/// can be persisted across multiple [`EventConsumer`] lifetimes.
+///
+/// `PersistedMetadata` logically corresponds to a program executable (i.e., a workflow module
+/// in Tardigrade), not to its particular invocation (i.e., a workflow instance in Tardigrade).
+/// Multiple invocations of the same executable can (and optimally should)
+/// share `PersistedMetadata`.
+///
+/// [serializable]: https://docs.rs/serde/1/serde
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersistedMetadata {
     inner: HashMap<MetadataId, CallSiteData>,
-    /// Was this metadata injected into the `tracing` runtime? This should happen the first
-    /// time the `PersistedMetadata` is used.
+    // Was this metadata injected into the `tracing` runtime? This should happen the first
+    // time the `PersistedMetadata` is used.
     #[serde(skip, default)]
     is_injected: bool,
 }
 
 impl PersistedMetadata {
+    /// Iterates over contained call site metadata together with the corresponding
+    /// [`MetadataId`]s.
     pub fn iter(&self) -> impl Iterator<Item = (MetadataId, &CallSiteData)> + '_ {
         self.inner.iter().map(|(id, data)| (*id, data))
     }
 }
 
+/// Information about alive tracing [`Span`]s that is [serializable] and thus
+/// can be persisted across multiple [`EventConsumer`] lifetimes.
+///
+/// Unlike [`PersistedMetadata`], `PersistedSpans` are specific to an executable invocation
+/// (i.e., a workflow instance in Tardigrade).
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersistedSpans {
     inner: HashMap<RawSpanId, SpanInfo>,
-    /// Were these spans injected into the `tracing` runtime? This should happen the first
-    /// time the `PersistedSpans` are used.
+    // Were these spans injected into the `tracing` runtime? This should happen the first
+    // time the `PersistedSpans` are used.
     #[serde(skip, default)]
     is_injected: bool,
 }
 
+/// Error processing a [`TracingEvent`] by an [`EventConsumer`].
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ConsumeError {
+    /// The event contains a reference to an unknown [`Metadata`] ID.
     UnknownMetadataId(MetadataId),
+    /// The event contains a reference to an unknown [`Span`] ID.
     UnknownSpanId(RawSpanId),
-    TooManyValues { max: usize, actual: usize },
+    /// The event contains too many values.
+    TooManyValues {
+        /// Maximum supported number of values per event.
+        max: usize,
+        /// Actual number of values.
+        actual: usize,
+    },
 }
 
 impl fmt::Display for ConsumeError {
@@ -126,6 +151,13 @@ macro_rules! create_value_set {
     };
 }
 
+/// Consumer of [`TracingEvent`]s produced by [`EmittingSubscriber`] that relays them
+/// to the tracing infrastructure.
+///
+/// The consumer takes care of persisting [`Metadata`] / [`Span`]s that can outlive
+/// the lifetime of the host program (not just the `EventConsumer` instance!).
+/// In the Tardigrade runtime, a consumer instance is created each time a workflow is executed.
+/// It relays tracing events from the workflow logic (executed in WASM) to the host.
 #[derive(Debug, Default)]
 pub struct EventConsumer {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
@@ -136,6 +168,7 @@ impl EventConsumer {
     /// Maximum supported number of values in a span or event.
     const MAX_VALUES: usize = 32;
 
+    /// Restores the consumer from the persisted `metadata` and tracing `spans`.
     pub fn new(metadata: &mut PersistedMetadata, spans: &mut PersistedSpans) -> Self {
         let mut this = Self::default();
 
@@ -219,11 +252,15 @@ impl EventConsumer {
         }
     }
 
-    pub fn consume_event(&mut self, event: TracingEvent) {
-        self.try_consume_event(event)
-            .expect("received bogus tracing event");
-    }
-
+    /// Tries to consume an event and relays it to the tracing infrastructure.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the event contains a bogus reference to a call site or a span, or if it contains
+    /// too many values. In general, an error can mean that the consumer was not properly
+    /// restored from the persisted state, or that the event generator is bogus (e.g.,
+    /// not an [`EmittingSubscriber`]).
+    #[allow(clippy::missing_panics_doc)] // false positive
     pub fn try_consume_event(&mut self, event: TracingEvent) -> Result<(), ConsumeError> {
         match event {
             TracingEvent::NewCallSite { id, data } => {
@@ -327,11 +364,21 @@ impl EventConsumer {
         Ok(())
     }
 
+    /// Consumes an event and relays it to the tracing infrastructure.
+    ///
+    /// # Panics
+    ///
+    /// Panics in the same cases when [`Self::try_consume_event()`] returns an error.
+    pub fn consume_event(&mut self, event: TracingEvent) {
+        self.try_consume_event(event)
+            .expect("received bogus tracing event");
+    }
+
+    /// Persists [`Metadata`] produced by the previously consumed events. `persisted`
+    /// should *logically* be the same metadata as provided to [`Self::new()`]; i.e.,
+    /// metadata for a particular executable, such as a Tardigrade module.
     pub fn persist_metadata(&self, persisted: &mut PersistedMetadata) {
-        assert!(
-            persisted.is_injected,
-            "API misuse; persisted metadata should be previously injected"
-        );
+        persisted.is_injected = true;
         for (&id, &metadata) in &self.metadata {
             persisted
                 .inner
@@ -340,6 +387,7 @@ impl EventConsumer {
         }
     }
 
+    /// Returns alive spans produced by the previously consumed events.
     pub fn persist_spans(self) -> PersistedSpans {
         PersistedSpans {
             inner: self.spans,

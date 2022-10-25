@@ -13,36 +13,46 @@ use std::{
 
 use crate::{types::ValueVisitor, TracedValue};
 
+/// Statistics about a [`CapturedSpan`].
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
 pub struct SpanStats {
+    /// Number of times the span was entered.
     pub entered: usize,
+    /// Number of times the span was exited.
     pub exited: usize,
+    /// Is the span closed (dropped)?
     pub is_closed: bool,
 }
 
+/// Captured tracing span containing a reference to its [`Metadata`], values that the span
+/// was created with, and [stats](SpanStats).
 #[derive(Debug)]
 pub struct CapturedSpan {
     metadata: &'static Metadata<'static>,
-    values: Vec<(&'static str, TracedValue)>,
+    values: Vec<(&'static str, TracedValue)>, // FIXME: use LinkedHashMap
     stats: SpanStats,
 }
 
 impl CapturedSpan {
+    /// Provides a reference to the span metadata.
     pub fn metadata(&self) -> &'static Metadata<'static> {
         self.metadata
     }
 
+    /// Iterates over values that the span was created with, or which were recorded later.
     pub fn values(&self) -> impl Iterator<Item = (&'static str, &TracedValue)> + '_ {
         self.values.iter().map(|(name, value)| (*name, value))
     }
 
+    /// Returns a value for the specified field, or `None` if the value is not defined.
     pub fn value(&self, name: &str) -> Option<&TracedValue> {
         self.values
             .iter()
             .find_map(|(s, value)| if *s == name { Some(value) } else { None })
     }
 
+    /// Returns statistics about span operations.
     pub fn stats(&self) -> SpanStats {
         self.stats
     }
@@ -57,12 +67,20 @@ impl ops::Index<&str> for CapturedSpan {
     }
 }
 
-#[derive(Debug, Default)]
+/// Storage of captured tracing information.
+///
+/// `Storage` instances are not created directly; instead, they are wrapped in [`SharedStorage`]
+/// and can be accessed via [`lock()`](SharedStorage::lock()).
+#[derive(Debug)]
 pub struct Storage {
     spans: Vec<CapturedSpan>,
 }
 
 impl Storage {
+    fn new() -> Self {
+        Self { spans: vec![] }
+    }
+
     /// Iterates over all captured spans in the order of capture.
     pub fn spans(&self) -> impl Iterator<Item = &CapturedSpan> + '_ {
         self.spans.iter()
@@ -95,12 +113,24 @@ impl Storage {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+/// Shared wrapper for tracing [`Storage`].
+#[derive(Debug, Clone)]
 pub struct SharedStorage {
     inner: Arc<Mutex<Storage>>,
 }
 
+impl Default for SharedStorage {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(Storage::new())),
+        }
+    }
+}
+
 impl SharedStorage {
+    /// Locks the underlying [`Storage`] for exclusive access. While the lock is held,
+    /// capturing cannot progress; beware deadlocks!
+    #[allow(clippy::missing_panics_doc)]
     pub fn lock(&self) -> impl ops::Deref<Target = Storage> + '_ {
         self.inner.lock().unwrap()
     }
@@ -121,6 +151,7 @@ impl SimpleFilter {
     }
 }
 
+/// Tracing [`Layer`] that captures (optionally filtered) spans.
 #[derive(Debug)]
 pub struct CaptureLayer {
     filter: Option<SimpleFilter>,
@@ -128,6 +159,9 @@ pub struct CaptureLayer {
 }
 
 impl CaptureLayer {
+    /// Creates a new layer that will use the specified `storage` to store captured data.
+    /// Captured spans are not filtered; like any [`Layer`], filtering can be set up
+    /// on the layer or subscriber level.
     pub fn new(storage: &SharedStorage) -> Self {
         Self {
             filter: None,
@@ -135,6 +169,9 @@ impl CaptureLayer {
         }
     }
 
+    /// Specifies filtering for this layer. This can be used for cheap per-layer filtering if
+    /// it is not supported by the tracing subscriber.
+    #[must_use]
     pub fn with_filter(mut self, target: impl Into<String>, level: impl Into<LevelFilter>) -> Self {
         self.filter = Some(SimpleFilter {
             target: target.into(),

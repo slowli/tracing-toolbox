@@ -66,6 +66,13 @@ impl Inner {
     }
 }
 
+/// Tracing [`Subscriber`] that converts tracing events into (de)serializable [presentation]
+/// that can be sent elsewhere using a customizable hook.
+///
+/// This subscriber is used in the Tardigrade client library to send workflow traces to the host
+/// via a WASM import function.
+///
+/// [presentation]: TracingEvent
 #[derive(Debug)]
 pub struct EmittingSubscriber<F = fn(TracingEvent)> {
     inner: RwLock<Inner>,
@@ -74,6 +81,7 @@ pub struct EmittingSubscriber<F = fn(TracingEvent)> {
 }
 
 impl<F: Fn(TracingEvent) + 'static> EmittingSubscriber<F> {
+    /// Creates a subscriber with the specified "on event" hook.
     pub fn new(on_event: F) -> Self {
         Self {
             inner: RwLock::default(),

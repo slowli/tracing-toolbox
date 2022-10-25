@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["orchestration", "workflow", "business process"]
 categories = ["asynchronous", "wasm"]
-description = "Tracing infrastructure for Tardigrade orchestration engine"
+description = "Tracing infrastructure for Tardigrade workflows"
 repository = "https://github.com/slowli/tardigrade"
 
 [dependencies]
