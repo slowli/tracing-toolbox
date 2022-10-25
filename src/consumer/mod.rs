@@ -10,6 +10,9 @@ use tracing_core::{
 
 use std::{collections::HashMap, error, fmt};
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     arena::ARENA, serde_helpers, CallSiteData, MetadataId, RawSpanId, TracedValue, TracingEvent,
 };
@@ -89,21 +92,50 @@ pub struct PersistedSpans {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
+pub enum ConsumeError {
+    UnknownMetadataId(MetadataId),
+    UnknownSpanId(RawSpanId),
+    TooManyValues { max: usize, actual: usize },
+}
+
+impl fmt::Display for ConsumeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownMetadataId(id) => write!(formatter, "unknown metadata ID: {id}"),
+            Self::UnknownSpanId(id) => write!(formatter, "unknown span ID: {id}"),
+            Self::TooManyValues { max, actual } => write!(
+                formatter,
+                "too many values provided ({actual}), should be no more than {max}"
+            ),
+        }
+    }
+}
+
+impl error::Error for ConsumeError {}
+
+macro_rules! create_value_set {
+    ($fields:ident, $values:ident, [$($i:expr,)+]) => {
+        match $values.len() {
+            0 => $fields.value_set(&[]),
+            $(
+            $i => $fields.value_set(<&[_; $i]>::try_from($values).unwrap()),
+            )+
+            _ => unreachable!(),
+        }
+    };
+}
+
+#[derive(Debug, Default)]
 pub struct EventConsumer {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
     spans: HashMap<RawSpanId, SpanInfo>,
 }
 
-impl Default for EventConsumer {
-    fn default() -> Self {
-        Self {
-            metadata: HashMap::new(),
-            spans: HashMap::new(),
-        }
-    }
-}
-
 impl EventConsumer {
+    /// Maximum supported number of values in a span or event.
+    const MAX_VALUES: usize = 32;
+
     pub fn new(metadata: &mut PersistedMetadata, spans: &mut PersistedSpans) -> Self {
         let mut this = Self::default();
 
@@ -121,12 +153,28 @@ impl EventConsumer {
         dispatch_fn(&dispatcher::get_default(Dispatch::clone))
     }
 
-    fn metadata(&self, id: MetadataId) -> &'static Metadata<'static> {
-        self.metadata[&id]
+    fn metadata(&self, id: MetadataId) -> Result<&'static Metadata<'static>, ConsumeError> {
+        self.metadata
+            .get(&id)
+            .copied()
+            .ok_or(ConsumeError::UnknownMetadataId(id))
     }
 
-    fn map_span_id(&self, remote_id: RawSpanId) -> &Id {
-        &self.spans[&remote_id].local_id
+    fn map_span_id(&self, remote_id: RawSpanId) -> Result<&Id, ConsumeError> {
+        self.spans
+            .get(&remote_id)
+            .map(|span| &span.local_id)
+            .ok_or(ConsumeError::UnknownSpanId(remote_id))
+    }
+
+    fn ensure_values_len(values: &[(String, TracedValue)]) -> Result<(), ConsumeError> {
+        if values.len() > Self::MAX_VALUES {
+            return Err(ConsumeError::TooManyValues {
+                actual: values.len(),
+                max: Self::MAX_VALUES,
+            });
+        }
+        Ok(())
     }
 
     fn generate_fields<'a>(
@@ -153,14 +201,14 @@ impl EventConsumer {
         fields: &'a FieldSet,
         values: &'a [(&Field, Option<&dyn Value>)],
     ) -> ValueSet<'a> {
-        match values.len() {
-            0 => fields.value_set(&[]),
-            1 => fields.value_set(<&[_; 1]>::try_from(values).unwrap()),
-            2 => fields.value_set(<&[_; 2]>::try_from(values).unwrap()),
-            3 => fields.value_set(<&[_; 3]>::try_from(values).unwrap()),
-            4 => fields.value_set(<&[_; 4]>::try_from(values).unwrap()),
-            _ => todo!(),
-        }
+        create_value_set!(
+            fields,
+            values,
+            [
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]
+        )
     }
 
     fn on_new_call_site(&mut self, id: MetadataId, data: CallSiteData, register: bool) {
@@ -172,6 +220,11 @@ impl EventConsumer {
     }
 
     pub fn consume_event(&mut self, event: TracingEvent) {
+        self.try_consume_event(event)
+            .expect("received bogus tracing event");
+    }
+
+    pub fn try_consume_event(&mut self, event: TracingEvent) -> Result<(), ConsumeError> {
         match event {
             TracingEvent::NewCallSite { id, data } => {
                 self.on_new_call_site(id, data, true);
@@ -183,12 +236,14 @@ impl EventConsumer {
                 metadata_id,
                 values,
             } => {
-                let metadata = self.metadata(metadata_id);
+                Self::ensure_values_len(&values)?;
+
+                let metadata = self.metadata(metadata_id)?;
                 let values = Self::generate_fields(metadata, &values);
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
                 let attributes = if let Some(parent_id) = parent_id {
-                    let local_parent_id = self.map_span_id(parent_id);
+                    let local_parent_id = self.map_span_id(parent_id)?;
                     Attributes::child_of(local_parent_id.clone(), metadata, &values)
                 } else {
                     Attributes::new(metadata, &values)
@@ -207,35 +262,45 @@ impl EventConsumer {
             }
 
             TracingEvent::FollowsFrom { id, follows_from } => {
-                let local_id = self.map_span_id(id);
-                let local_follows_from = self.map_span_id(follows_from);
+                let local_id = self.map_span_id(id)?;
+                let local_follows_from = self.map_span_id(follows_from)?;
                 Self::dispatch(|dispatch| {
                     dispatch.record_follows_from(local_id, local_follows_from);
                 });
             }
             TracingEvent::SpanEntered { id } => {
-                let local_id = self.map_span_id(id);
+                let local_id = self.map_span_id(id)?;
                 Self::dispatch(|dispatch| dispatch.enter(local_id));
             }
             TracingEvent::SpanExited { id } => {
-                let local_id = self.map_span_id(id);
+                let local_id = self.map_span_id(id)?;
                 Self::dispatch(|dispatch| dispatch.exit(local_id));
             }
             TracingEvent::SpanCloned { id } => {
-                self.spans.get_mut(&id).unwrap().ref_count += 1;
+                let span = self
+                    .spans
+                    .get_mut(&id)
+                    .ok_or(ConsumeError::UnknownSpanId(id))?;
+                span.ref_count += 1;
                 // Dispatcher is intentionally not called: we handle ref counting locally.
             }
             TracingEvent::SpanDropped { id } => {
-                self.spans.get_mut(&id).unwrap().ref_count -= 1;
-                if self.spans[&id].ref_count == 0 {
+                let span = self
+                    .spans
+                    .get_mut(&id)
+                    .ok_or(ConsumeError::UnknownSpanId(id))?;
+                span.ref_count -= 1;
+                if span.ref_count == 0 {
                     let local_id = self.spans.remove(&id).unwrap().local_id;
                     Self::dispatch(|dispatch| dispatch.try_close(local_id.clone()));
                 }
             }
 
             TracingEvent::ValuesRecorded { id, values } => {
-                let local_id = self.map_span_id(id);
-                let metadata = self.metadata(self.spans[&id].metadata_id);
+                Self::ensure_values_len(&values)?;
+
+                let local_id = self.map_span_id(id)?;
+                let metadata = self.metadata(self.spans[&id].metadata_id)?;
                 let values = Self::generate_fields(metadata, &values);
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
@@ -248,15 +313,18 @@ impl EventConsumer {
                 parent,
                 values,
             } => {
-                let metadata = self.metadata(metadata_id);
+                Self::ensure_values_len(&values)?;
+
+                let metadata = self.metadata(metadata_id)?;
                 let values = Self::generate_fields(metadata, &values);
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
-                let parent = parent.map(|id| self.map_span_id(id).clone());
+                let parent = parent.map(|id| self.map_span_id(id)).transpose()?.cloned();
                 let event = Event::new_child_of(parent, metadata, &values);
                 Self::dispatch(|dispatch| dispatch.event(&event));
             }
         }
+        Ok(())
     }
 
     pub fn persist_metadata(&self, persisted: &mut PersistedMetadata) {
