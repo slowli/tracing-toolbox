@@ -46,7 +46,7 @@ impl TracedValue {
             Self::Bool(value) => value,
             Self::Int(value) => value,
             Self::UInt(value) => value,
-            Self::FloatingPoint(value) => value,
+            Self::Float(value) => value,
             Self::String(value) => value,
             Self::Object(value) => return CowValue::Owned(Box::new(field::debug(value))),
             Self::Error(err) => {

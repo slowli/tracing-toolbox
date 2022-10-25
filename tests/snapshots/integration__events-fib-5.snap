@@ -24,7 +24,7 @@ expression: events
     id: 1
     values:
       approx:
-        floating_point: 5
+        float: 5
 - new_call_site:
     id: 1
     kind: event

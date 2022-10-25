@@ -180,7 +180,7 @@ pub enum TracedValue {
     Bool(bool),
     Int(i128),
     UInt(u128),
-    FloatingPoint(f64),
+    Float(f64),
     String(String),
     Object(DebugObject),
     Error(TracedError),
@@ -192,9 +192,27 @@ impl From<bool> for TracedValue {
     }
 }
 
+impl PartialEq<bool> for TracedValue {
+    fn eq(&self, other: &bool) -> bool {
+        match self {
+            Self::Bool(value) => value == other,
+            _ => false,
+        }
+    }
+}
+
 impl From<i128> for TracedValue {
     fn from(value: i128) -> Self {
         Self::Int(value)
+    }
+}
+
+impl PartialEq<i128> for TracedValue {
+    fn eq(&self, other: &i128) -> bool {
+        match self {
+            Self::Int(value) => value == other,
+            _ => false,
+        }
     }
 }
 
@@ -204,9 +222,27 @@ impl From<i64> for TracedValue {
     }
 }
 
+impl PartialEq<i64> for TracedValue {
+    fn eq(&self, other: &i64) -> bool {
+        match self {
+            Self::Int(value) => *value == i128::from(*other),
+            _ => false,
+        }
+    }
+}
+
 impl From<u128> for TracedValue {
     fn from(value: u128) -> Self {
         Self::UInt(value)
+    }
+}
+
+impl PartialEq<u128> for TracedValue {
+    fn eq(&self, other: &u128) -> bool {
+        match self {
+            Self::UInt(value) => value == other,
+            _ => false,
+        }
     }
 }
 
@@ -216,9 +252,27 @@ impl From<u64> for TracedValue {
     }
 }
 
+impl PartialEq<u64> for TracedValue {
+    fn eq(&self, other: &u64) -> bool {
+        match self {
+            Self::UInt(value) => *value == u128::from(*other),
+            _ => false,
+        }
+    }
+}
+
 impl From<f64> for TracedValue {
     fn from(value: f64) -> Self {
-        Self::FloatingPoint(value)
+        Self::Float(value)
+    }
+}
+
+impl PartialEq<f64> for TracedValue {
+    fn eq(&self, other: &f64) -> bool {
+        match self {
+            Self::Float(value) => value == other,
+            _ => false,
+        }
     }
 }
 
@@ -228,9 +282,60 @@ impl From<&str> for TracedValue {
     }
 }
 
+impl PartialEq<str> for TracedValue {
+    fn eq(&self, other: &str) -> bool {
+        match self {
+            Self::String(value) => value == other,
+            _ => false,
+        }
+    }
+}
+
 impl TracedValue {
     fn debug(object: &dyn fmt::Debug) -> Self {
         Self::Object(DebugObject(format!("{object:?}")))
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<i128> {
+        match self {
+            Self::Int(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_uint(&self) -> Option<u128> {
+        match self {
+            Self::UInt(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::Float(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_debug(&self, object: &dyn fmt::Debug) -> bool {
+        match self {
+            Self::Object(value) => value.0 == format!("{object:?}"),
+            _ => false,
+        }
     }
 
     fn error(err: &(dyn error::Error + 'static)) -> Self {
