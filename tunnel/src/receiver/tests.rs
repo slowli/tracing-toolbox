@@ -1,15 +1,11 @@
 //! Tests for tracing event receiver.
 
 use assert_matches::assert_matches;
-use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 use std::borrow::Cow;
 
 use super::*;
-use crate::{
-    capture::{CaptureLayer, SharedStorage},
-    CallSiteKind, TracingLevel,
-};
+use crate::{CallSiteKind, TracingLevel};
 
 const CALL_SITE_DATA: CallSiteData = create_call_site(Vec::new());
 
@@ -24,42 +20,6 @@ const fn create_call_site(fields: Vec<Cow<'static, str>>) -> CallSiteData {
         line: Some(42),
         fields,
     }
-}
-
-#[test]
-fn replayed_spans_are_closed_if_entered_multiple_times() {
-    let events = [
-        TracingEvent::NewCallSite {
-            id: 0,
-            data: CALL_SITE_DATA,
-        },
-        TracingEvent::NewSpan {
-            id: 0,
-            parent_id: None,
-            metadata_id: 0,
-            values: vec![],
-        },
-        TracingEvent::SpanEntered { id: 0 },
-        TracingEvent::SpanExited { id: 0 },
-        TracingEvent::SpanEntered { id: 0 },
-        TracingEvent::SpanExited { id: 0 },
-        TracingEvent::SpanDropped { id: 0 },
-    ];
-
-    let storage = SharedStorage::default();
-    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
-    tracing::subscriber::with_default(subscriber, || {
-        let mut receiver = TracingEventReceiver::default();
-        for event in events {
-            receiver.receive(event);
-        }
-    });
-
-    let storage = storage.lock();
-    let span = storage.spans().next().unwrap();
-    assert_eq!(span.stats().entered, 2);
-    assert_eq!(span.stats().exited, 2);
-    assert!(span.stats().is_closed);
 }
 
 #[test]

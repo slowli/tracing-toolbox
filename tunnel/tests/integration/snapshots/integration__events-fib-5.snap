@@ -1,16 +1,16 @@
 ---
-source: tests/integration.rs
-assertion_line: 101
+source: tunnel/tests/integration/main.rs
+assertion_line: 45
 expression: events
 ---
 - new_call_site:
     id: 0
     kind: span
     name: fib
-    target: integration
+    target: "integration::fib"
     level: info
-    module_path: integration
-    file: tests/integration.rs
+    module_path: "integration::fib"
+    file: "tunnel\\tests/integration\\fib.rs"
     line: 42
     fields:
       - approx
@@ -29,10 +29,10 @@ expression: events
     id: 1
     kind: event
     name: event
-    target: integration
+    target: "integration::fib"
     level: warn
-    module_path: integration
-    file: tests/integration.rs
+    module_path: "integration::fib"
+    file: "tunnel\\tests/integration\\fib.rs"
     line: 42
     fields:
       - message
@@ -50,8 +50,8 @@ expression: events
     name: compute
     target: fib
     level: info
-    module_path: integration
-    file: tests/integration.rs
+    module_path: "integration::fib"
+    file: "tunnel\\tests/integration\\fib.rs"
     line: 42
     fields:
       - count
@@ -69,8 +69,8 @@ expression: events
     name: event
     target: fib
     level: debug
-    module_path: integration
-    file: tests/integration.rs
+    module_path: "integration::fib"
+    file: "tunnel\\tests/integration\\fib.rs"
     line: 42
     fields:
       - message
@@ -127,8 +127,8 @@ expression: events
     name: event
     target: fib
     level: info
-    module_path: integration
-    file: tests/integration.rs
+    module_path: "integration::fib"
+    file: "tunnel\\tests/integration\\fib.rs"
     line: 42
     fields:
       - return
@@ -145,10 +145,10 @@ expression: events
     id: 5
     kind: event
     name: event
-    target: integration
+    target: "integration::fib"
     level: info
-    module_path: integration
-    file: tests/integration.rs
+    module_path: "integration::fib"
+    file: "tunnel\\tests/integration\\fib.rs"
     line: 42
     fields:
       - message

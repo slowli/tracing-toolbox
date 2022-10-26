@@ -14,7 +14,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{types::ValueVisitor, TracedValue};
+use tracing_tunnel::{TracedValue, ValueVisitor};
 
 /// Statistics about a [`CapturedSpan`].
 #[derive(Debug, Clone, Copy, Default)]

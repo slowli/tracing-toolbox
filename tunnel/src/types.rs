@@ -56,7 +56,6 @@ pub enum CallSiteKind {
 ///
 /// This corresponds to [`Metadata`] from the `tracing-core` library, but is (de)serializable.
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct CallSiteData {
     /// Kind of the call site.
     pub kind: CallSiteKind,
@@ -419,7 +418,8 @@ impl TracedValue {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct ValueVisitor<S> {
+#[doc(hidden)] // not public; used by `tracing-capture`
+pub struct ValueVisitor<S> {
     pub values: Vec<(S, TracedValue)>,
 }
 

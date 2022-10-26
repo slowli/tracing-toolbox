@@ -3,76 +3,20 @@
 use assert_matches::assert_matches;
 use insta::assert_yaml_snapshot;
 use once_cell::sync::Lazy;
-use tracing_core::{field, Level, Subscriber};
-use tracing_subscriber::{layer::SubscriberExt, registry::LookupSpan, FmtSubscriber, Registry};
+use tracing_core::{Level, Subscriber};
+use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
 
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    error, fmt,
-    sync::{Arc, Mutex},
 };
 
-use tardigrade_tracing::{
-    capture::{CaptureLayer, SharedStorage, Storage},
+mod fib;
+
+use tracing_tunnel::{
     CallSiteKind, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
-    TracingEventReceiver, TracingEventSender, TracingLevel,
+    TracingEventReceiver, TracingLevel,
 };
-
-#[derive(Debug)]
-struct Overflow;
-
-impl fmt::Display for Overflow {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "integer overflow")
-    }
-}
-
-impl error::Error for Overflow {}
-
-#[tracing::instrument(target = "fib", ret, err)]
-fn compute(count: usize) -> Result<u64, Overflow> {
-    let (mut x, mut y) = (0_u64, 1_u64);
-    for i in 0..count {
-        tracing::debug!(target: "fib", i, current = x, "performing iteration");
-        (x, y) = (y, x.checked_add(y).ok_or(Overflow)?);
-    }
-    Ok(x)
-}
-
-const PHI: f64 = 1.618033988749895; // (1 + sqrt(5)) / 2
-
-fn fib(count: usize) {
-    let span = tracing::info_span!("fib", approx = field::Empty);
-    let _entered = span.enter();
-
-    let approx = PHI.powi(count as i32) / 5.0_f64.sqrt();
-    let approx = approx.round();
-    span.record("approx", approx);
-
-    tracing::warn!(count, "count looks somewhat large");
-    match compute(count) {
-        Ok(result) => {
-            tracing::info!(result, "computed Fibonacci number");
-        }
-        Err(err) => {
-            tracing::error!(error = &err as &dyn error::Error, "computation failed");
-        }
-    }
-}
-
-/// **NB.** Must be called once per program run; otherwise, call sites will be missing
-/// on subsequent runs.
-fn record_events(count: usize) -> Vec<TracingEvent> {
-    let events = Arc::new(Mutex::new(vec![]));
-    let events_ = Arc::clone(&events);
-    let recorder = TracingEventSender::new(move |event| {
-        events_.lock().unwrap().push(event);
-    });
-
-    tracing::subscriber::with_default(recorder, || fib(count));
-    Arc::try_unwrap(events).unwrap().into_inner().unwrap()
-}
 
 #[derive(Debug)]
 struct RecordedEvents {
@@ -81,8 +25,8 @@ struct RecordedEvents {
 }
 
 static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
-    short: record_events(5),
-    long: record_events(80),
+    short: fib::record_events(5),
+    long: fib::record_events(80),
 });
 
 #[test]
@@ -172,7 +116,7 @@ fn call_sites_for_tracing_events() {
         .iter()
         .map(|site| site.target.as_ref())
         .collect();
-    assert_eq!(targets, HashSet::from_iter(["fib", "integration"]));
+    assert_eq!(targets, HashSet::from_iter(["fib", "integration::fib"]));
 
     let mut call_sites_by_level = HashMap::<_, usize>::new();
     for site in &event_call_sites {
@@ -299,42 +243,4 @@ fn persisting_spans() {
             }
         }
     });
-}
-
-#[test]
-fn capturing_spans_directly() {
-    Lazy::force(&EVENTS); // necessary to not influence the `EmittingSubscriber`
-
-    let storage = SharedStorage::default();
-    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
-    tracing::subscriber::with_default(subscriber, || fib(5));
-
-    assert_captured_spans(&storage.lock());
-}
-
-fn assert_captured_spans(storage: &Storage) {
-    let fib_span = storage
-        .spans()
-        .find(|span| span.metadata().name() == "compute")
-        .unwrap();
-    assert_eq!(fib_span.metadata().target(), "fib");
-    assert_eq!(fib_span.stats().entered, 1);
-    assert!(fib_span.stats().is_closed);
-    assert_matches!(fib_span["count"], TracedValue::UInt(5));
-}
-
-#[test]
-fn capturing_spans_for_replayed_events() {
-    let events = &EVENTS.short;
-
-    let storage = SharedStorage::default();
-    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
-    tracing::subscriber::with_default(subscriber, || {
-        let mut consumer = TracingEventReceiver::default();
-        for event in events {
-            consumer.receive(event.clone());
-        }
-    });
-
-    assert_captured_spans(&storage.lock());
 }
