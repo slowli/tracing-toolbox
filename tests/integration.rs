@@ -15,8 +15,8 @@ use std::{
 
 use tardigrade_tracing::{
     capture::{CaptureLayer, SharedStorage, Storage},
-    CallSiteKind, EmittingSubscriber, EventConsumer, PersistedMetadata, PersistedSpans,
-    TracedValue, TracingEvent, TracingLevel,
+    CallSiteKind, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
+    TracingEventReceiver, TracingEventSender, TracingLevel,
 };
 
 #[derive(Debug)]
@@ -66,7 +66,7 @@ fn fib(count: usize) {
 fn record_events(count: usize) -> Vec<TracingEvent> {
     let events = Arc::new(Mutex::new(vec![]));
     let events_ = Arc::clone(&events);
-    let recorder = EmittingSubscriber::new(move |event| {
+    let recorder = TracingEventSender::new(move |event| {
         events_.lock().unwrap().push(event);
     });
 
@@ -237,10 +237,10 @@ fn create_fmt_subscriber() -> impl Subscriber + for<'a> LookupSpan<'a> {
 fn reproducing_events_on_fmt_subscriber() {
     let events = &EVENTS.long;
 
-    let mut consumer = EventConsumer::default();
+    let mut consumer = TracingEventReceiver::default();
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
-            consumer.consume_event(event.clone());
+            consumer.receive(event.clone());
         }
     });
 }
@@ -250,10 +250,10 @@ fn persisting_metadata() {
     let events = &EVENTS.short;
 
     let mut persisted = PersistedMetadata::default();
-    let mut consumer = EventConsumer::new(&mut persisted, &mut PersistedSpans::default());
+    let mut consumer = TracingEventReceiver::new(&mut persisted, &mut PersistedSpans::default());
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
-            consumer.consume_event(event.clone());
+            consumer.receive(event.clone());
         }
     });
     consumer.persist_metadata(&mut persisted);
@@ -266,11 +266,11 @@ fn persisting_metadata() {
     assert!(names.contains("compute"), "{names:?}");
 
     // Check that `consumer` can function after restoring `persisted` meta.
-    let mut consumer = EventConsumer::new(&mut persisted, &mut PersistedSpans::default());
+    let mut consumer = TracingEventReceiver::new(&mut persisted, &mut PersistedSpans::default());
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             if !matches!(event, TracingEvent::NewCallSite { .. }) {
-                consumer.consume_event(event.clone());
+                consumer.receive(event.clone());
             }
         }
     });
@@ -283,9 +283,9 @@ fn persisting_spans() {
     let mut metadata = PersistedMetadata::default();
     let mut spans = PersistedSpans::default();
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
-        let mut consumer = EventConsumer::new(&mut metadata, &mut spans);
+        let mut consumer = TracingEventReceiver::new(&mut metadata, &mut spans);
         for event in events {
-            consumer.consume_event(event.clone());
+            consumer.receive(event.clone());
 
             if matches!(
                 event,
@@ -295,7 +295,7 @@ fn persisting_spans() {
                 // spans should be non-empty.
                 consumer.persist_metadata(&mut metadata);
                 spans = consumer.persist_spans();
-                consumer = EventConsumer::new(&mut metadata, &mut spans);
+                consumer = TracingEventReceiver::new(&mut metadata, &mut spans);
             }
         }
     });
@@ -330,9 +330,9 @@ fn capturing_spans_for_replayed_events() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut consumer = EventConsumer::default();
+        let mut consumer = TracingEventReceiver::default();
         for event in events {
-            consumer.consume_event(event.clone());
+            consumer.receive(event.clone());
         }
     });
 

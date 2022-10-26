@@ -1,4 +1,4 @@
-//! Tests for tracing event consumer.
+//! Tests for tracing event receiver.
 
 use assert_matches::assert_matches;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
@@ -19,7 +19,7 @@ const fn create_call_site(fields: Vec<Cow<'static, str>>) -> CallSiteData {
         name: Cow::Borrowed("test"),
         target: Cow::Borrowed("tardigrade_tracing"),
         level: TracingLevel::Error,
-        module_path: Some(Cow::Borrowed("subscriber::tests")),
+        module_path: Some(Cow::Borrowed("receiver::tests")),
         file: Some(Cow::Borrowed("tests")),
         line: Some(42),
         fields,
@@ -49,9 +49,9 @@ fn replayed_spans_are_closed_if_entered_multiple_times() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut consumer = EventConsumer::default();
+        let mut receiver = TracingEventReceiver::default();
         for event in events {
-            consumer.consume_event(event);
+            receiver.receive(event);
         }
     });
 
@@ -70,9 +70,9 @@ fn unknown_metadata_error() {
         metadata_id: 0,
         values: vec![],
     };
-    let mut consumer = EventConsumer::default();
-    let err = consumer.try_consume_event(event).unwrap_err();
-    assert_matches!(err, ConsumeError::UnknownMetadataId(0));
+    let mut receiver = TracingEventReceiver::default();
+    let err = receiver.try_receive(event).unwrap_err();
+    assert_matches!(err, ReceiveError::UnknownMetadataId(0));
 }
 
 #[test]
@@ -98,14 +98,14 @@ fn unknown_span_errors() {
         },
     ];
 
-    let mut consumer = EventConsumer::default();
-    consumer.consume_event(TracingEvent::NewCallSite {
+    let mut receiver = TracingEventReceiver::default();
+    receiver.receive(TracingEvent::NewCallSite {
         id: 0,
         data: CALL_SITE_DATA,
     });
     for bogus_event in bogus_events {
-        let err = consumer.try_consume_event(bogus_event).unwrap_err();
-        assert_matches!(err, ConsumeError::UnknownSpanId(1));
+        let err = receiver.try_receive(bogus_event).unwrap_err();
+        assert_matches!(err, ReceiveError::UnknownSpanId(1));
     }
 }
 
@@ -114,11 +114,11 @@ fn spans_with_allowed_value_lengths() {
     for values_len in 0..=32 {
         println!("values length: {values_len}");
 
-        let mut consumer = EventConsumer::default();
+        let mut receiver = TracingEventReceiver::default();
         let fields = (0..values_len)
             .map(|i| Cow::Owned(format!("field{i}")))
             .collect();
-        consumer.consume_event(TracingEvent::NewCallSite {
+        receiver.receive(TracingEvent::NewCallSite {
             id: 0,
             data: create_call_site(fields),
         });
@@ -126,20 +126,20 @@ fn spans_with_allowed_value_lengths() {
         let values = (0..values_len)
             .map(|i| (format!("field{i}"), TracedValue::Int(i.into())))
             .collect();
-        consumer.consume_event(TracingEvent::NewSpan {
+        receiver.receive(TracingEvent::NewSpan {
             id: 0,
             parent_id: None,
             metadata_id: 0,
             values,
         });
-        consumer.consume_event(TracingEvent::SpanDropped { id: 0 });
+        receiver.receive(TracingEvent::SpanDropped { id: 0 });
     }
 }
 
 #[test]
 fn too_many_values_error() {
-    let mut consumer = EventConsumer::default();
-    consumer.consume_event(TracingEvent::NewCallSite {
+    let mut receiver = TracingEventReceiver::default();
+    receiver.receive(TracingEvent::NewCallSite {
         id: 0,
         data: CALL_SITE_DATA,
     });
@@ -153,10 +153,10 @@ fn too_many_values_error() {
         metadata_id: 0,
         values,
     };
-    let err = consumer.try_consume_event(bogus_event).unwrap_err();
+    let err = receiver.try_receive(bogus_event).unwrap_err();
     assert_matches!(
         err,
-        ConsumeError::TooManyValues {
+        ReceiveError::TooManyValues {
             actual: 33,
             max: 32
         }

@@ -10,10 +10,10 @@
 This crate provides various [tracing] infrastructure helpers for [`tardigrade`]
 workflows.
 
-- `EmittingSubscriber` is a tracing [`Subscriber`] that converts tracing events
+- `TracingEventSender` is a tracing [`Subscriber`] that converts tracing events
   into (de)serializable presentation that can be sent elsewhere using a customizable hook.
   The [`tardigrade`] client library uses this subscriber to send tracing events to the host.
-- `EventConsumer` consumes events produced by `EmittingSubscriber` and relays them
+- `TracingEventReceiver` consumes events produced by a `TracingEventSender` and relays them
   to the tracing infrastructure. The consumer is used by [the Tardigrade runtime].
 - `CaptureLayer` can be used to capture spans during testing.
 

@@ -1,6 +1,6 @@
 //! Helpers to (de)serialize some parts of `TracingEvent`s.
 
-#[cfg(feature = "consumer")]
+#[cfg(feature = "receiver")]
 pub(crate) mod span_id {
     use serde::{
         de::{Error as DeError, Visitor},
@@ -90,7 +90,7 @@ pub(crate) mod tuples {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "receiver"))]
 mod tests {
     use serde::{Deserialize, Serialize};
     use tracing_core::span::Id;

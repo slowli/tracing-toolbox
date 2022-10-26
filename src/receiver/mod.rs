@@ -66,7 +66,7 @@ struct SpanInfo {
 }
 
 /// Information about span / event [`Metadata`] that is [serializable] and thus
-/// can be persisted across multiple [`EventConsumer`] lifetimes.
+/// can be persisted across multiple [`TracingEventReceiver`] lifetimes.
 ///
 /// `PersistedMetadata` logically corresponds to a program executable (i.e., a workflow module
 /// in Tardigrade), not to its particular invocation (i.e., a workflow instance in Tardigrade).
@@ -93,7 +93,7 @@ impl PersistedMetadata {
 }
 
 /// Information about alive tracing spans that is (de)serializable and thus
-/// can be persisted across multiple [`EventConsumer`] lifetimes.
+/// can be persisted across multiple [`TracingEventReceiver`] lifetimes.
 ///
 /// Unlike [`PersistedMetadata`], `PersistedSpans` are specific to an executable invocation
 /// (i.e., a workflow instance in Tardigrade).
@@ -107,10 +107,10 @@ pub struct PersistedSpans {
     is_injected: bool,
 }
 
-/// Error processing a [`TracingEvent`] by an [`EventConsumer`].
+/// Error processing a [`TracingEvent`] by a [`TracingEventReceiver`].
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum ConsumeError {
+pub enum ReceiveError {
     /// The event contains a reference to an unknown [`Metadata`] ID.
     UnknownMetadataId(MetadataId),
     /// The event contains a reference to an unknown [`Span`] ID.
@@ -124,7 +124,7 @@ pub enum ConsumeError {
     },
 }
 
-impl fmt::Display for ConsumeError {
+impl fmt::Display for ReceiveError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnknownMetadataId(id) => write!(formatter, "unknown metadata ID: {id}"),
@@ -137,7 +137,7 @@ impl fmt::Display for ConsumeError {
     }
 }
 
-impl error::Error for ConsumeError {}
+impl error::Error for ReceiveError {}
 
 macro_rules! create_value_set {
     ($fields:ident, $values:ident, [$($i:expr,)+]) => {
@@ -151,22 +151,22 @@ macro_rules! create_value_set {
     };
 }
 
-/// Consumer of [`TracingEvent`]s produced by [`EmittingSubscriber`] that relays them
+/// Receiver of [`TracingEvent`]s produced by [`TracingEventSender`] that relays them
 /// to the tracing infrastructure.
 ///
 /// The consumer takes care of persisting [`Metadata`] / spans that can outlive
-/// the lifetime of the host program (not just the `EventConsumer` instance!).
+/// the lifetime of the host program (not just the `TracingEventReceiver` instance!).
 /// In the Tardigrade runtime, a consumer instance is created each time a workflow is executed.
 /// It relays tracing events from the workflow logic (executed in WASM) to the host.
 ///
-/// [`EmittingSubscriber`]: crate::EmittingSubscriber
+/// [`TracingEventSender`]: crate::TracingEventSender
 #[derive(Debug, Default)]
-pub struct EventConsumer {
+pub struct TracingEventReceiver {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
     spans: HashMap<RawSpanId, SpanInfo>,
 }
 
-impl EventConsumer {
+impl TracingEventReceiver {
     /// Maximum supported number of values in a span or event.
     const MAX_VALUES: usize = 32;
 
@@ -188,23 +188,23 @@ impl EventConsumer {
         dispatch_fn(&dispatcher::get_default(Dispatch::clone))
     }
 
-    fn metadata(&self, id: MetadataId) -> Result<&'static Metadata<'static>, ConsumeError> {
+    fn metadata(&self, id: MetadataId) -> Result<&'static Metadata<'static>, ReceiveError> {
         self.metadata
             .get(&id)
             .copied()
-            .ok_or(ConsumeError::UnknownMetadataId(id))
+            .ok_or(ReceiveError::UnknownMetadataId(id))
     }
 
-    fn map_span_id(&self, remote_id: RawSpanId) -> Result<&Id, ConsumeError> {
+    fn map_span_id(&self, remote_id: RawSpanId) -> Result<&Id, ReceiveError> {
         self.spans
             .get(&remote_id)
             .map(|span| &span.local_id)
-            .ok_or(ConsumeError::UnknownSpanId(remote_id))
+            .ok_or(ReceiveError::UnknownSpanId(remote_id))
     }
 
-    fn ensure_values_len(values: &[(String, TracedValue)]) -> Result<(), ConsumeError> {
+    fn ensure_values_len(values: &[(String, TracedValue)]) -> Result<(), ReceiveError> {
         if values.len() > Self::MAX_VALUES {
-            return Err(ConsumeError::TooManyValues {
+            return Err(ReceiveError::TooManyValues {
                 actual: values.len(),
                 max: Self::MAX_VALUES,
             });
@@ -259,13 +259,13 @@ impl EventConsumer {
     /// # Errors
     ///
     /// Fails if the event contains a bogus reference to a call site or a span, or if it contains
-    /// too many values. In general, an error can mean that the consumer was not properly
-    /// restored from the persisted state, or that the event generator is bogus (e.g.,
-    /// not an [`EmittingSubscriber`]).
+    /// too many values. In general, an error can mean that the consumer was restored
+    /// from an incorrect persisted state, or that the event generator is bogus (e.g.,
+    /// not an [`TracingEventSender`]).
     ///
-    /// [`EmittingSubscriber`]: crate::EmittingSubscriber
+    /// [`TracingEventSender`]: crate::TracingEventSender
     #[allow(clippy::missing_panics_doc)] // false positive
-    pub fn try_consume_event(&mut self, event: TracingEvent) -> Result<(), ConsumeError> {
+    pub fn try_receive(&mut self, event: TracingEvent) -> Result<(), ReceiveError> {
         match event {
             TracingEvent::NewCallSite { id, data } => {
                 self.on_new_call_site(id, data, true);
@@ -321,7 +321,7 @@ impl EventConsumer {
                 let span = self
                     .spans
                     .get_mut(&id)
-                    .ok_or(ConsumeError::UnknownSpanId(id))?;
+                    .ok_or(ReceiveError::UnknownSpanId(id))?;
                 span.ref_count += 1;
                 // Dispatcher is intentionally not called: we handle ref counting locally.
             }
@@ -329,7 +329,7 @@ impl EventConsumer {
                 let span = self
                     .spans
                     .get_mut(&id)
-                    .ok_or(ConsumeError::UnknownSpanId(id))?;
+                    .ok_or(ReceiveError::UnknownSpanId(id))?;
                 span.ref_count -= 1;
                 if span.ref_count == 0 {
                     let local_id = self.spans.remove(&id).unwrap().local_id;
@@ -372,9 +372,9 @@ impl EventConsumer {
     ///
     /// # Panics
     ///
-    /// Panics in the same cases when [`Self::try_consume_event()`] returns an error.
-    pub fn consume_event(&mut self, event: TracingEvent) {
-        self.try_consume_event(event)
+    /// Panics in the same cases when [`Self::try_receive()`] returns an error.
+    pub fn receive(&mut self, event: TracingEvent) {
+        self.try_receive(event)
             .expect("received bogus tracing event");
     }
 

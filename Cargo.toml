@@ -29,14 +29,14 @@ tracing = "0.1.37"
 
 [features]
 default = []
-# Enables `EmittingSubscriber`.
-subscriber = []
-# Enables `EventConsumer`.
-consumer = []
+# Enables `TracingEventSender`.
+sender = []
+# Enables `TracingEventReceiver`.
+receiver = []
 # Enables capturing tracing information.
 capture = ["tracing-subscriber"]
 
 [[test]]
 name = "integration"
 path = "tests/integration.rs"
-required-features = ["subscriber", "consumer", "capture"]
+required-features = ["sender", "receiver", "capture"]

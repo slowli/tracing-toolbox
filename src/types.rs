@@ -107,12 +107,12 @@ impl From<&Metadata<'static>> for CallSiteData {
 
 /// Events produced during tracing.
 ///
-/// These events are emitted by an [`EmittingSubscriber`] and then consumed by an [`EventConsumer`]
+/// These events are emitted by an [`TracingEventSender`] and then consumed by an [`TracingEventReceiver`]
 /// to pass tracing info across a certain boundary (e.g., the WASM client-host boundary
 /// in the case of Tardigrade workflows).
 ///
-/// [`EmittingSubscriber`]: crate::EmittingSubscriber
-/// [`EventConsumer`]: crate::EventConsumer
+/// [`TracingEventSender`]: crate::TracingEventSender
+/// [`TracingEventReceiver`]: crate::TracingEventReceiver
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
