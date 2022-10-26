@@ -1,5 +1,5 @@
 ---
-source: crates/tracing/tests/integration.rs
+source: tests/integration.rs
 assertion_line: 101
 expression: events
 ---
@@ -10,7 +10,7 @@ expression: events
     target: integration
     level: info
     module_path: integration
-    file: "crates\\tracing\\tests\\integration.rs"
+    file: tests/integration.rs
     line: 42
     fields:
       - approx
@@ -32,7 +32,7 @@ expression: events
     target: integration
     level: warn
     module_path: integration
-    file: "crates\\tracing\\tests\\integration.rs"
+    file: tests/integration.rs
     line: 42
     fields:
       - message
@@ -51,7 +51,7 @@ expression: events
     target: fib
     level: info
     module_path: integration
-    file: "crates\\tracing\\tests\\integration.rs"
+    file: tests/integration.rs
     line: 42
     fields:
       - count
@@ -70,7 +70,7 @@ expression: events
     target: fib
     level: debug
     module_path: integration
-    file: "crates\\tracing\\tests\\integration.rs"
+    file: tests/integration.rs
     line: 42
     fields:
       - message
@@ -128,7 +128,7 @@ expression: events
     target: fib
     level: info
     module_path: integration
-    file: "crates\\tracing\\tests\\integration.rs"
+    file: tests/integration.rs
     line: 42
     fields:
       - return
@@ -148,7 +148,7 @@ expression: events
     target: integration
     level: info
     module_path: integration
-    file: "crates\\tracing\\tests\\integration.rs"
+    file: tests/integration.rs
     line: 42
     fields:
       - message
