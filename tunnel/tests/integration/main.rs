@@ -149,20 +149,24 @@ fn event_fields_have_same_order() {
         } = event
         {
             if *metadata_id == debug_metadata_id {
-                return Some(values.as_slice());
+                return Some(values);
             }
         }
         None
     });
 
     for fields in debug_fields {
+        let fields: Vec<_> = fields
+            .iter()
+            .map(|(name, value)| (name.as_str(), value))
+            .collect();
         assert_matches!(
-            fields,
+            fields.as_slice(),
             [
-                (message, TracedValue::Object(_)),
-                (i, TracedValue::UInt(_)),
-                (current, TracedValue::UInt(_)),
-            ] if i == "i" && current == "current" && message == "message"
+                ("message", TracedValue::Object(_)),
+                ("i", TracedValue::UInt(_)),
+                ("current", TracedValue::UInt(_)),
+            ]
         );
     }
 }

@@ -15,7 +15,9 @@ mod arena;
 mod tests;
 
 use self::arena::ARENA;
-use crate::{serde_helpers, CallSiteData, MetadataId, RawSpanId, TracedValue, TracingEvent};
+use crate::{
+    serde_helpers, CallSiteData, MetadataId, RawSpanId, TracedValue, TracedValues, TracingEvent,
+};
 
 enum CowValue<'a> {
     Borrowed(&'a dyn Value),
@@ -208,7 +210,7 @@ impl TracingEventReceiver {
             .ok_or(ReceiveError::UnknownSpanId(remote_id))
     }
 
-    fn ensure_values_len(values: &[(String, TracedValue)]) -> Result<(), ReceiveError> {
+    fn ensure_values_len(values: &TracedValues<String>) -> Result<(), ReceiveError> {
         if values.len() > Self::MAX_VALUES {
             return Err(ReceiveError::TooManyValues {
                 actual: values.len(),
@@ -220,7 +222,7 @@ impl TracingEventReceiver {
 
     fn generate_fields<'a>(
         metadata: &'static Metadata<'static>,
-        values: &'a [(String, TracedValue)],
+        values: &'a TracedValues<String>,
     ) -> Vec<(Field, CowValue<'a>)> {
         let fields = metadata.fields();
         values

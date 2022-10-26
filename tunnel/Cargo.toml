@@ -9,7 +9,8 @@ description = "Tunnelling tracing information across API boundary"
 repository = "https://github.com/slowli/tracing-toolbox"
 
 [dependencies]
-once_cell = "1.15.0"
+linked-hash-map = { version = "0.5.6", features = ["serde_impl"] }
+once_cell = { version = "1.15.0", optional = true }
 serde = { version = "1", features = ["derive"] }
 tracing-core = "0.1.30"
 
@@ -25,7 +26,7 @@ default = []
 # Enables `TracingEventSender`.
 sender = []
 # Enables `TracingEventReceiver` and closely related types.
-receiver = []
+receiver = ["once_cell"]
 
 [[test]]
 name = "integration"

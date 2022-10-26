@@ -28,7 +28,7 @@ fn unknown_metadata_error() {
         id: 0,
         parent_id: None,
         metadata_id: 0,
-        values: vec![],
+        values: TracedValues::new(),
     };
     let mut receiver = TracingEventReceiver::default();
     let err = receiver.try_receive(event).unwrap_err();
@@ -45,16 +45,16 @@ fn unknown_span_errors() {
             id: 42,
             parent_id: Some(1),
             metadata_id: 0,
-            values: vec![],
+            values: TracedValues::new(),
         },
         TracingEvent::NewEvent {
             metadata_id: 0,
             parent: Some(1),
-            values: vec![],
+            values: TracedValues::new(),
         },
         TracingEvent::ValuesRecorded {
             id: 1,
-            values: vec![],
+            values: TracedValues::new(),
         },
     ];
 

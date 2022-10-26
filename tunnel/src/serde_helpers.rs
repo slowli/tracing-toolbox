@@ -37,65 +37,12 @@ pub(crate) mod span_id {
     }
 }
 
-pub(crate) mod tuples {
-    use serde::{
-        de::{MapAccess, Visitor},
-        ser::SerializeMap,
-        Deserialize, Deserializer, Serialize, Serializer,
-    };
-
-    use std::{fmt, marker::PhantomData};
-
-    pub fn serialize<S: Serializer, T: Serialize>(
-        tuples: &[(String, T)],
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        let mut map = serializer.serialize_map(Some(tuples.len()))?;
-        for (name, value) in tuples {
-            map.serialize_entry(name, value)?;
-        }
-        map.end()
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
-        deserializer: D,
-    ) -> Result<Vec<(String, T)>, D::Error> {
-        struct MapVisitor<T> {
-            _ty: PhantomData<T>,
-        }
-
-        impl<T> Default for MapVisitor<T> {
-            fn default() -> Self {
-                Self { _ty: PhantomData }
-            }
-        }
-
-        impl<'de, T: Deserialize<'de>> Visitor<'de> for MapVisitor<T> {
-            type Value = Vec<(String, T)>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str("map of name-value pairs")
-            }
-
-            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-                let mut entries = map.size_hint().map_or_else(Vec::new, Vec::with_capacity);
-                while let Some(tuple) = map.next_entry::<String, T>()? {
-                    entries.push(tuple);
-                }
-                Ok(entries)
-            }
-        }
-
-        deserializer.deserialize_map(MapVisitor::<T>::default())
-    }
-}
-
 #[cfg(all(test, feature = "receiver"))]
 mod tests {
     use serde::{Deserialize, Serialize};
     use tracing_core::span::Id;
 
-    use super::{span_id, tuples};
+    use super::span_id;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct IdWrapper {
@@ -120,20 +67,5 @@ mod tests {
         let err = serde_json::from_value::<IdWrapper>(serialized).unwrap_err();
         let err = err.to_string();
         assert!(err.contains("span IDs must be positive"), "{}", err);
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    #[serde(transparent)]
-    struct TupleWrapper(#[serde(with = "tuples")] Vec<(String, u32)>);
-
-    #[test]
-    fn tuple_serialization() {
-        let tuples = vec![("test".to_owned(), 7), ("other".to_owned(), 42)];
-        let wrapper = TupleWrapper(tuples.clone());
-        let serialized = serde_json::to_string(&wrapper).unwrap();
-        assert_eq!(serialized, r#"{"test":7,"other":42}"#);
-
-        let restored: TupleWrapper = serde_json::from_str(&serialized).unwrap();
-        assert_eq!(restored.0, tuples);
     }
 }

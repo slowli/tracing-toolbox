@@ -1,11 +1,10 @@
 //! Types to carry tracing events over the WASM client-host boundary.
 
+use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use tracing_core::{field::Visit, Field, Level, Metadata};
 
-use std::{borrow::Cow, error, fmt};
-
-use crate::serde_helpers;
+use std::{borrow::Cow, error, fmt, hash::Hash};
 
 /// ID of a tracing [`Metadata`] record as used in [`TracingEvent`]s.
 pub type MetadataId = u64;
@@ -134,8 +133,7 @@ pub enum TracingEvent {
         /// ID of the span metadata.
         metadata_id: MetadataId,
         /// Values associated with the span.
-        #[serde(with = "serde_helpers::tuples")]
-        values: Vec<(String, TracedValue)>,
+        values: TracedValues<String>,
     },
     /// New "follows from" relation between spans.
     FollowsFrom {
@@ -169,8 +167,7 @@ pub enum TracingEvent {
         /// ID of the span.
         id: RawSpanId,
         /// Recorded values.
-        #[serde(with = "serde_helpers::tuples")]
-        values: Vec<(String, TracedValue)>,
+        values: TracedValues<String>,
     },
 
     /// New event.
@@ -181,8 +178,7 @@ pub enum TracingEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         parent: Option<RawSpanId>,
         /// Values associated with the event.
-        #[serde(with = "serde_helpers::tuples")]
-        values: Vec<(String, TracedValue)>,
+        values: TracedValues<String>,
     },
 }
 
@@ -416,48 +412,67 @@ impl TracedValue {
     }
 }
 
-#[derive(Debug, Default)]
+/// Collection of named [`TracedValue`]s.
+pub type TracedValues<K> = LinkedHashMap<K, TracedValue>;
+
 #[doc(hidden)] // not public; used by `tracing-capture`
 pub struct ValueVisitor<S> {
-    pub values: Vec<(S, TracedValue)>,
+    pub values: TracedValues<S>,
 }
 
-impl<S: From<&'static str>> Visit for ValueVisitor<S> {
+impl<S: fmt::Debug + Eq + Hash> fmt::Debug for ValueVisitor<S> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ValueVisitor")
+            .field("values", &self.values)
+            .finish()
+    }
+}
+
+impl<S: Eq + Hash> Default for ValueVisitor<S> {
+    fn default() -> Self {
+        Self {
+            values: TracedValues::new(),
+        }
+    }
+}
+
+impl<S: From<&'static str> + Eq + Hash> Visit for ValueVisitor<S> {
     fn record_f64(&mut self, field: &Field, value: f64) {
-        self.values.push((field.name().into(), value.into()));
+        self.values.insert(field.name().into(), value.into());
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.values.push((field.name().into(), value.into()));
+        self.values.insert(field.name().into(), value.into());
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
-        self.values.push((field.name().into(), value.into()));
+        self.values.insert(field.name().into(), value.into());
     }
 
     fn record_i128(&mut self, field: &Field, value: i128) {
-        self.values.push((field.name().into(), value.into()));
+        self.values.insert(field.name().into(), value.into());
     }
 
     fn record_u128(&mut self, field: &Field, value: u128) {
-        self.values.push((field.name().into(), value.into()));
+        self.values.insert(field.name().into(), value.into());
     }
 
     fn record_bool(&mut self, field: &Field, value: bool) {
-        self.values.push((field.name().into(), value.into()));
+        self.values.insert(field.name().into(), value.into());
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.values.push((field.name().into(), value.into()));
+        self.values.insert(field.name().into(), value.into());
     }
 
     fn record_error(&mut self, field: &Field, value: &(dyn error::Error + 'static)) {
         self.values
-            .push((field.name().into(), TracedValue::error(value)));
+            .insert(field.name().into(), TracedValue::error(value));
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         self.values
-            .push((field.name().into(), TracedValue::debug(value)));
+            .insert(field.name().into(), TracedValue::debug(value));
     }
 }

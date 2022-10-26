@@ -9,7 +9,8 @@ mod fib;
 
 use tracing_capture::{CaptureLayer, SharedStorage, Storage};
 use tracing_tunnel::{
-    CallSiteData, CallSiteKind, TracedValue, TracingEvent, TracingEventReceiver, TracingLevel,
+    CallSiteData, CallSiteKind, TracedValue, TracedValues, TracingEvent, TracingEventReceiver,
+    TracingLevel,
 };
 
 const CALL_SITE_DATA: CallSiteData = CallSiteData {
@@ -36,7 +37,7 @@ fn replayed_spans_are_closed_if_entered_multiple_times() {
             id: 0,
             parent_id: None,
             metadata_id: 0,
-            values: vec![],
+            values: TracedValues::new(),
         },
         TracingEvent::SpanEntered { id: 0 },
         TracingEvent::SpanExited { id: 0 },

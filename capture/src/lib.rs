@@ -62,7 +62,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use tracing_tunnel::{TracedValue, ValueVisitor};
+use tracing_tunnel::{TracedValue, TracedValues, ValueVisitor};
 
 /// Statistics about a [`CapturedSpan`].
 #[derive(Debug, Clone, Copy, Default)]
@@ -81,7 +81,7 @@ pub struct SpanStats {
 #[derive(Debug)]
 pub struct CapturedSpan {
     metadata: &'static Metadata<'static>,
-    values: Vec<(&'static str, TracedValue)>, // FIXME: use LinkedHashMap
+    values: TracedValues<&'static str>,
     stats: SpanStats,
 }
 
@@ -158,7 +158,7 @@ impl Storage {
         span.stats.is_closed = true;
     }
 
-    fn on_record(&mut self, idx: usize, values: Vec<(&'static str, TracedValue)>) {
+    fn on_record(&mut self, idx: usize, values: TracedValues<&'static str>) {
         let span = self.spans.get_mut(idx).unwrap();
         span.values.extend(values);
     }

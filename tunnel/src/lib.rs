@@ -119,5 +119,5 @@ pub use crate::receiver::{PersistedMetadata, PersistedSpans, ReceiveError, Traci
 pub use crate::sender::TracingEventSender;
 pub use crate::types::{
     CallSiteData, CallSiteKind, DebugObject, MetadataId, RawSpanId, TracedError, TracedValue,
-    TracingEvent, TracingLevel, ValueVisitor,
+    TracedValues, TracingEvent, TracingLevel, ValueVisitor,
 };
