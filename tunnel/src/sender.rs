@@ -69,10 +69,15 @@ impl Inner {
 /// Tracing [`Subscriber`] that converts tracing events into (de)serializable [presentation]
 /// that can be sent elsewhere using a customizable hook.
 ///
-/// This subscriber is used in the Tardigrade client library to send workflow traces to the host
-/// via a WASM import function.
+/// As an example, this subscriber is used in the [Tardigrade client library] to send
+/// workflow traces to the host via a WASM import function.
+///
+/// # Examples
+///
+/// See [crate-level docs](index.html) for an example of usage.
 ///
 /// [presentation]: TracingEvent
+/// [Tardigrade client library]: https://docs.rs/tardigrade
 #[derive(Debug)]
 pub struct TracingEventSender<F = fn(TracingEvent)> {
     inner: RwLock<Inner>,

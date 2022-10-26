@@ -113,7 +113,7 @@ pub struct PersistedSpans {
 pub enum ReceiveError {
     /// The event contains a reference to an unknown [`Metadata`] ID.
     UnknownMetadataId(MetadataId),
-    /// The event contains a reference to an unknown [`Span`] ID.
+    /// The event contains a reference to an unknown span ID.
     UnknownSpanId(RawSpanId),
     /// The event contains too many values.
     TooManyValues {
@@ -156,10 +156,16 @@ macro_rules! create_value_set {
 ///
 /// The consumer takes care of persisting [`Metadata`] / spans that can outlive
 /// the lifetime of the host program (not just the `TracingEventReceiver` instance!).
-/// In the Tardigrade runtime, a consumer instance is created each time a workflow is executed.
-/// It relays tracing events from the workflow logic (executed in WASM) to the host.
+/// As an example, in [the Tardigrade runtime], a consumer instance is created each time
+/// a workflow is executed. It relays tracing events from the workflow logic (executed in WASM)
+/// to the host.
+///
+/// # Examples
+///
+/// See [crate-level docs](index.html) for an example of usage.
 ///
 /// [`TracingEventSender`]: crate::TracingEventSender
+/// [the Tardigrade runtime]: https://docs.rs/tardigrade-rt/
 #[derive(Debug, Default)]
 pub struct TracingEventReceiver {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
@@ -261,7 +267,7 @@ impl TracingEventReceiver {
     /// Fails if the event contains a bogus reference to a call site or a span, or if it contains
     /// too many values. In general, an error can mean that the consumer was restored
     /// from an incorrect persisted state, or that the event generator is bogus (e.g.,
-    /// not an [`TracingEventSender`]).
+    /// not a [`TracingEventSender`]).
     ///
     /// [`TracingEventSender`]: crate::TracingEventSender
     #[allow(clippy::missing_panics_doc)] // false positive

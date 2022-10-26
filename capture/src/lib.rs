@@ -1,7 +1,48 @@
 //! Capturing tracing spans, e.g. for testing purposes.
 //!
 //! The core type in this crate is [`CaptureLayer`], a tracing [`Layer`] that can be used
-//! to capture tracing spans. See its docs for more details.
+//! to capture tracing spans.
+//!
+//! # Examples
+//!
+//! ```
+//! use tracing::Level;
+//! use tracing_subscriber::layer::SubscriberExt;
+//! use tracing_capture::{CaptureLayer, SharedStorage};
+//!
+//! let subscriber = tracing_subscriber::fmt()
+//!     .pretty()
+//!     .with_max_level(Level::INFO)
+//!     .finish();
+//! // Add the capturing layer.
+//! let storage = SharedStorage::default();
+//! let subscriber = subscriber.with(CaptureLayer::new(&storage));
+//!
+//! // Capture tracing information.
+//! tracing::subscriber::with_default(subscriber, || {
+//!     tracing::info_span!("test", num = 42_i64).in_scope(|| {
+//!         tracing::warn!("I feel disturbance in the Force...");
+//!     });
+//! });
+//!
+//! // Inspect the only captured span.
+//! let storage = storage.lock();
+//! let span = storage.spans()
+//!     .find(|span| span.metadata().name() == "test")
+//!     .unwrap();
+//! assert_eq!(span["num"], 42_i64);
+//! assert_eq!(span.stats().entered, 1);
+//! assert!(span.stats().is_closed);
+//! ```
+//!
+//! # Alternatives / similar tools
+//!
+//! - [`tracing-test`] is a lower-level alternative.
+//! - [`tracing-fluent-assertions`] is more similar in its goals, but differs significantly
+//!   in the API design; e.g., the assertions need to be declared before the capture.
+//!
+//! [`tracing-test`]: https://docs.rs/tracing-test
+//! [`tracing-fluent-assertions`]: https://docs.rs/tracing-fluent-assertions
 
 // Documentation settings.
 #![doc(html_root_url = "https://docs.rs/tracing-capture/0.1.0")]
@@ -139,7 +180,7 @@ impl Default for SharedStorage {
 
 impl SharedStorage {
     /// Locks the underlying [`Storage`] for exclusive access. While the lock is held,
-    /// capturing cannot progress; beware deadlocks!
+    /// capturing cannot progress; beware of deadlocks!
     #[allow(clippy::missing_panics_doc)]
     pub fn lock(&self) -> impl ops::Deref<Target = Storage> + '_ {
         self.inner.lock().unwrap()
@@ -162,6 +203,14 @@ impl SimpleFilter {
 }
 
 /// Tracing [`Layer`] that captures (optionally filtered) spans.
+///
+/// The layer can optionally filter spans by target and/or level, which could be used
+/// instead of per-layer filtering if it's not supported by the subscriber. Keep in mind
+/// that without filtering, `CaptureLayer` can capture a lot of unnecessary spans.
+///
+/// # Examples
+///
+/// See [crate-level docs](index.html) for an example of usage.
 #[derive(Debug)]
 pub struct CaptureLayer {
     filter: Option<SimpleFilter>,

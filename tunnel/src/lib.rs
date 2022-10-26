@@ -1,7 +1,7 @@
-//! Tunnelling tracing information across API boundary.
+//! Tunnelling tracing information across an API boundary.
 //!
 //! This crate provides [tracing] infrastructure helpers allowing to transfer tracing events
-//! across API boundary:
+//! across an API boundary:
 //!
 //! - [`TracingEventSender`] is a tracing [`Subscriber`] that converts tracing events
 //!   into (de)serializable presentation that can be sent elsewhere using a customizable hook.
@@ -19,7 +19,10 @@
 //! - [The Tardigrade runtime] uses [`TracingEventReceiver`] to pass traces from the workflow
 //!   to the host tracing infrastructure.
 //!
-//! Note that
+//! [`tardigrade`]: https://docs.rs/tardigrade
+//! [tracing]: https://docs.rs/tracing/0.1/tracing
+//! [`Subscriber`]: tracing_core::Subscriber
+//! [The Tardigrade runtime]: https://docs.rs/tardigrade-rt
 //!
 //! # Crate features
 //!
@@ -37,10 +40,61 @@
 //!
 //! Provides [`TracingEventReceiver`].
 //!
-//! [`tardigrade`]: https://docs.rs/tardigrade
-//! [tracing]: https://docs.rs/tracing/0.1/tracing
-//! [`Subscriber`]: tracing_core::Subscriber
-//! [The Tardigrade runtime]: https://docs.rs/tardigrade-rt
+//! # Examples
+//!
+//! ## Sending events with `TracingEventSender`
+//!
+//! ```
+//! # use assert_matches::assert_matches;
+//! # use std::sync::mpsc;
+//! use tracing_tunnel::{TracingEvent, TracingEventSender, TracingEventReceiver};
+//!
+//! // Let's collect tracing events using an MPSC channel.
+//! let (events_sx, events_rx) = mpsc::sync_channel(10);
+//! let subscriber = TracingEventSender::new(move |event| {
+//!     events_sx.send(event).ok();
+//! });
+//!
+//! tracing::subscriber::with_default(subscriber, || {
+//!     tracing::info_span!("test", num = 42_i64).in_scope(|| {
+//!         tracing::warn!("I feel disturbance in the Force...");
+//!     });
+//! });
+//!
+//! let events: Vec<_> = events_rx.iter().collect();
+//! assert!(!events.is_empty());
+//! // There should be one "new span".
+//! let span_count = events
+//!     .iter()
+//!     .filter(|event| matches!(event, TracingEvent::NewSpan { .. }))
+//!     .count();
+//! assert_eq!(span_count, 1);
+//! ```
+//!
+//! ## Receiving events from `TracingEventReceiver`
+//!
+//! ```
+//! # use tracing_tunnel::{PersistedMetadata, TracingEvent, TracingEventReceiver};
+//! tracing_subscriber::fmt().pretty().init();
+//!
+//! let events: Vec<TracingEvent> = // ...
+//! #    vec![];
+//! // Replay `events` using the default subscriber.
+//! let mut receiver = TracingEventReceiver::default();
+//! for event in events {
+//!     if let Err(err) = receiver.try_receive(event) {
+//!         tracing::warn!(%err, "received invalid tracing event");
+//!     }
+//! }
+//! // Persist the resulting receiver state. There are two pieces
+//! // of the state: metadata and alive spans.
+//! let mut metadata = PersistedMetadata::default();
+//! receiver.persist_metadata(&mut metadata);
+//! // `metadata` can be shared among multiple executions of the same executable
+//! // (e.g., a WASM module).
+//! let spans = receiver.persist_spans();
+//! // `spans` are specific for an execution.
+//! ```
 
 // Documentation settings.
 #![cfg_attr(docsrs, feature(doc_cfg))]
