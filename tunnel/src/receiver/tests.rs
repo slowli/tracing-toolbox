@@ -13,7 +13,7 @@ const fn create_call_site(fields: Vec<Cow<'static, str>>) -> CallSiteData {
     CallSiteData {
         kind: CallSiteKind::Span,
         name: Cow::Borrowed("test"),
-        target: Cow::Borrowed("tardigrade_tracing"),
+        target: Cow::Borrowed("tracing_tunnel"),
         level: TracingLevel::Error,
         module_path: Some(Cow::Borrowed("receiver::tests")),
         file: Some(Cow::Borrowed("tests")),

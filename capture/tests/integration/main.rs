@@ -15,7 +15,7 @@ use tracing_tunnel::{
 const CALL_SITE_DATA: CallSiteData = CallSiteData {
     kind: CallSiteKind::Span,
     name: Cow::Borrowed("test"),
-    target: Cow::Borrowed("tardigrade_tracing"),
+    target: Cow::Borrowed("tracing_tunnel"),
     level: TracingLevel::Error,
     module_path: Some(Cow::Borrowed("integration")),
     file: Some(Cow::Borrowed("tests")),

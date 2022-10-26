@@ -44,7 +44,7 @@
 
 // Documentation settings.
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![doc(html_root_url = "https://docs.rs/tardigrade-tracing/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/tracing-tunnel/0.1.0")]
 // Linter settings.
 #![warn(missing_debug_implementations, missing_docs, bare_trait_objects)]
 #![warn(clippy::all, clippy::pedantic)]

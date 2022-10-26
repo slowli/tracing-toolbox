@@ -1,7 +1,14 @@
 //! Capturing tracing spans, e.g. for testing purposes.
 //!
-//! The core type in this module is [`CaptureLayer`], a tracing [`Layer`] that can be used
+//! The core type in this crate is [`CaptureLayer`], a tracing [`Layer`] that can be used
 //! to capture tracing spans. See its docs for more details.
+
+// Documentation settings.
+#![doc(html_root_url = "https://docs.rs/tracing-capture/0.1.0")]
+// Linter settings.
+#![warn(missing_debug_implementations, missing_docs, bare_trait_objects)]
+#![warn(clippy::all, clippy::pedantic)]
+#![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
 
 use tracing_core::{
     span::{Attributes, Id, Record},

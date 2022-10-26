@@ -1,11 +1,11 @@
 # Tunnelling Tracing Information Across API Boundary
 
-[![Build Status](https://github.com/slowli/tardigrade/workflows/CI/badge.svg?branch=main)](https://github.com/slowli/tardigrade/actions)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/slowli/tardigrade#license)
+[![Build Status](https://github.com/slowli/tracing-toolbox/workflows/CI/badge.svg?branch=main)](https://github.com/slowli/tracing-toolbox/actions)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/slowli/tracing-toolbox#license)
 ![rust 1.60+ required](https://img.shields.io/badge/rust-1.60+-blue.svg?label=Required%20Rust)
 
 **Documentation:**
-[![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://slowli.github.io/tardigrade/tardigrade_tracing/)
+[![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://slowli.github.io/tracing-toolbox/tracing_tunnel/)
 
 This crate provides [tracing] infrastructure helpers allowing to transfer tracing events
 across API boundary:
@@ -35,7 +35,7 @@ Add this to your `Crate.toml`:
 tracing-tunnel = "0.1.0"
 ```
 
-Note that the 3 pieces of functionality described above are gated behind opt-in features;
+Note that the both pieces of functionality described above are gated behind opt-in features;
 consult the crate docs for details.
 
 ## License
@@ -44,7 +44,7 @@ Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE)
 or [MIT license](LICENSE-MIT) at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in `tracing-tunnel` by you, as defined in the Apache-2.0 license,
+for inclusion in `tracing-toolbox` by you, as defined in the Apache-2.0 license,
 shall be dual licensed as above, without any additional terms or conditions.
 
 [`tardigrade`]: https://crates.io/crates/tardigrade
