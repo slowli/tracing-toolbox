@@ -9,7 +9,7 @@ use crate::serde_helpers;
 
 /// ID of a tracing [`Metadata`] record as used in [`TracingEvent`]s.
 pub type MetadataId = u64;
-/// ID of a tracing [`Span`](tracing_core::span::Span) as used in [`TracingEvent`]s.
+/// ID of a tracing span as used in [`TracingEvent`]s.
 pub type RawSpanId = u64;
 
 /// Tracing level defined in [`CallSiteData`].
@@ -107,9 +107,12 @@ impl From<&Metadata<'static>> for CallSiteData {
 
 /// Events produced during tracing.
 ///
-/// These events are emitted by the [`EmittingSubscriber`] and then consumed by [`EventConsumer`]
+/// These events are emitted by an [`EmittingSubscriber`] and then consumed by an [`EventConsumer`]
 /// to pass tracing info across a certain boundary (e.g., the WASM client-host boundary
 /// in the case of Tardigrade workflows).
+///
+/// [`EmittingSubscriber`]: crate::EmittingSubscriber
+/// [`EventConsumer`]: crate::EventConsumer
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]

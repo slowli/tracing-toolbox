@@ -92,7 +92,7 @@ impl PersistedMetadata {
     }
 }
 
-/// Information about alive tracing [`Span`]s that is [serializable] and thus
+/// Information about alive tracing spans that is (de)serializable and thus
 /// can be persisted across multiple [`EventConsumer`] lifetimes.
 ///
 /// Unlike [`PersistedMetadata`], `PersistedSpans` are specific to an executable invocation
@@ -154,10 +154,12 @@ macro_rules! create_value_set {
 /// Consumer of [`TracingEvent`]s produced by [`EmittingSubscriber`] that relays them
 /// to the tracing infrastructure.
 ///
-/// The consumer takes care of persisting [`Metadata`] / [`Span`]s that can outlive
+/// The consumer takes care of persisting [`Metadata`] / spans that can outlive
 /// the lifetime of the host program (not just the `EventConsumer` instance!).
 /// In the Tardigrade runtime, a consumer instance is created each time a workflow is executed.
 /// It relays tracing events from the workflow logic (executed in WASM) to the host.
+///
+/// [`EmittingSubscriber`]: crate::EmittingSubscriber
 #[derive(Debug, Default)]
 pub struct EventConsumer {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
@@ -260,6 +262,8 @@ impl EventConsumer {
     /// too many values. In general, an error can mean that the consumer was not properly
     /// restored from the persisted state, or that the event generator is bogus (e.g.,
     /// not an [`EmittingSubscriber`]).
+    ///
+    /// [`EmittingSubscriber`]: crate::EmittingSubscriber
     #[allow(clippy::missing_panics_doc)] // false positive
     pub fn try_consume_event(&mut self, event: TracingEvent) -> Result<(), ConsumeError> {
         match event {

@@ -1,4 +1,7 @@
-//! Capturing spans.
+//! Capturing tracing spans, e.g. for testing purposes.
+//!
+//! The core type in this module is [`CaptureLayer`], a tracing [`Layer`] that can be used
+//! to capture tracing spans. See its docs for more details.
 
 use tracing_core::{
     span::{Attributes, Id, Record},
