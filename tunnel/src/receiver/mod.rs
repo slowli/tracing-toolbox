@@ -369,7 +369,11 @@ impl TracingEventReceiver {
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
                 let parent = parent.map(|id| self.map_span_id(id)).transpose()?.cloned();
-                let event = Event::new_child_of(parent, metadata, &values);
+                let event = if let Some(parent) = parent {
+                    Event::new_child_of(parent, metadata, &values)
+                } else {
+                    Event::new(metadata, &values)
+                };
                 Self::dispatch(|dispatch| dispatch.event(&event));
             }
         }
