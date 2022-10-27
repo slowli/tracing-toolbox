@@ -1,6 +1,7 @@
 //! Integration tests for tracing capture.
 
 use assert_matches::assert_matches;
+use tracing_core::{Level, LevelFilter};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 use std::borrow::Cow;
@@ -80,6 +81,32 @@ fn assert_captured_spans(storage: &Storage) {
     assert_eq!(fib_span.stats().entered, 1);
     assert!(fib_span.stats().is_closed);
     assert_matches!(fib_span["count"], TracedValue::UInt(5));
+
+    assert_eq!(fib_span.events().len(), 6); // 5 iterations + return
+    let iter_events = fib_span.events()[0..5].iter();
+    for (i, event) in iter_events.enumerate() {
+        assert_eq!(event.metadata().target(), "fib");
+        assert_eq!(*event.metadata().level(), Level::DEBUG);
+        assert_eq!(
+            event["message"].as_debug_str(),
+            Some("performing iteration")
+        );
+        assert_eq!(event["i"], i as u64);
+    }
+    let return_event = fib_span.events().last().unwrap();
+    assert_eq!(*return_event.metadata().level(), Level::INFO);
+    assert!(return_event["return"].is_debug(&5));
+
+    let outer_span = storage.spans().next().unwrap();
+    assert_eq!(outer_span.metadata().name(), "fib");
+    assert_eq!(outer_span["approx"], 5.0_f64);
+    assert_eq!(outer_span.events().len(), 2);
+    let warn_event = &outer_span.events()[0];
+    assert_eq!(*warn_event.metadata().level(), Level::WARN);
+    assert_eq!(
+        warn_event["message"].as_debug_str(),
+        Some("count looks somewhat large")
+    );
 }
 
 #[test]
@@ -96,4 +123,30 @@ fn capturing_spans_for_replayed_events() {
     });
 
     assert_captured_spans(&storage.lock());
+}
+
+#[test]
+fn capturing_events_with_indirect_ancestor() {
+    #[tracing::instrument(level = "debug", ret)]
+    fn double(value: i32) -> i32 {
+        tracing::info!(value, "doubled");
+        value * 2
+    }
+
+    let storage = SharedStorage::default();
+    let layer = CaptureLayer::new(&storage).with_filter(LevelFilter::INFO);
+    let subscriber = Registry::default().with(layer);
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info_span!("wrapper").in_scope(|| double(5));
+        // The event in this span is not captured because it doesn't have a captured
+        // ancestor span.
+        tracing::debug_span!("debug_wrapper").in_scope(|| double(-3));
+    });
+
+    let storage = storage.lock();
+    assert_eq!(storage.spans().count(), 1);
+    let events: Vec<_> = storage.all_events().collect();
+    assert_eq!(events.len(), 1);
+    assert!(events[0].value("message").is_some());
+    assert_eq!(events[0]["value"], 5_i64);
 }

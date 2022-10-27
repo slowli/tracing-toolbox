@@ -33,6 +33,14 @@
 //! assert_eq!(span["num"], 42_i64);
 //! assert_eq!(span.stats().entered, 1);
 //! assert!(span.stats().is_closed);
+//!
+//! // Inspect the only event in the span.
+//! let event = &span.events()[0];
+//! assert_eq!(*event.metadata().level(), Level::WARN);
+//! assert_eq!(
+//!     event["message"].as_debug_str(),
+//!     Some("I feel disturbance in the Force...")
+//! );
 //! ```
 //!
 //! # Alternatives / similar tools
@@ -53,16 +61,56 @@
 
 use tracing_core::{
     span::{Attributes, Id, Record},
-    LevelFilter, Metadata, Subscriber,
+    Event, Metadata, Subscriber,
 };
-use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
+use tracing_subscriber::{
+    layer::{Context, Filter},
+    registry::LookupSpan,
+    Layer,
+};
 
 use std::{
-    ops,
+    fmt, ops,
     sync::{Arc, Mutex},
 };
 
 use tracing_tunnel::{TracedValue, TracedValues, ValueVisitor};
+
+/// Captured tracing event containing a reference to its [`Metadata`] and values that the event
+/// was created with.
+#[derive(Debug)]
+pub struct CapturedEvent {
+    metadata: &'static Metadata<'static>,
+    values: TracedValues<&'static str>,
+}
+
+impl CapturedEvent {
+    /// Provides a reference to the event metadata.
+    pub fn metadata(&self) -> &'static Metadata<'static> {
+        self.metadata
+    }
+
+    /// Iterates over values associated with the event.
+    pub fn values(&self) -> impl Iterator<Item = (&'static str, &TracedValue)> + '_ {
+        self.values.iter().map(|(name, value)| (*name, value))
+    }
+
+    /// Returns a value for the specified field, or `None` if the value is not defined.
+    pub fn value(&self, name: &str) -> Option<&TracedValue> {
+        self.values
+            .iter()
+            .find_map(|(s, value)| if *s == name { Some(value) } else { None })
+    }
+}
+
+impl ops::Index<&str> for CapturedEvent {
+    type Output = TracedValue;
+
+    fn index(&self, index: &str) -> &Self::Output {
+        self.value(index)
+            .unwrap_or_else(|| panic!("field `{index}` is not contained in event"))
+    }
+}
 
 /// Statistics about a [`CapturedSpan`].
 #[derive(Debug, Clone, Copy, Default)]
@@ -77,12 +125,13 @@ pub struct SpanStats {
 }
 
 /// Captured tracing span containing a reference to its [`Metadata`], values that the span
-/// was created with, and [stats](SpanStats).
+/// was created with, [stats](SpanStats), and descendant [`CapturedEvent`]s.
 #[derive(Debug)]
 pub struct CapturedSpan {
     metadata: &'static Metadata<'static>,
     values: TracedValues<&'static str>,
     stats: SpanStats,
+    events: Vec<CapturedEvent>,
 }
 
 impl CapturedSpan {
@@ -106,6 +155,11 @@ impl CapturedSpan {
     /// Returns statistics about span operations.
     pub fn stats(&self) -> SpanStats {
         self.stats
+    }
+
+    /// Returns events attached to this span.
+    pub fn events(&self) -> &[CapturedEvent] {
+        &self.events
     }
 }
 
@@ -137,6 +191,11 @@ impl Storage {
         self.spans.iter()
     }
 
+    /// Iterates over all captured events. The order of iteration is not specified.
+    pub fn all_events(&self) -> impl Iterator<Item = &CapturedEvent> + '_ {
+        self.spans.iter().flat_map(CapturedSpan::events)
+    }
+
     fn push_span(&mut self, span: CapturedSpan) -> usize {
         let idx = self.spans.len();
         self.spans.push(span);
@@ -161,6 +220,11 @@ impl Storage {
     fn on_record(&mut self, idx: usize, values: TracedValues<&'static str>) {
         let span = self.spans.get_mut(idx).unwrap();
         span.values.extend(values);
+    }
+
+    fn on_event(&mut self, span_idx: usize, event: CapturedEvent) {
+        let span = self.spans.get_mut(span_idx).unwrap();
+        span.events.push(event);
     }
 }
 
@@ -190,34 +254,38 @@ impl SharedStorage {
 #[derive(Debug, Clone, Copy)]
 struct SpanIndex(usize);
 
-#[derive(Debug)]
-struct SimpleFilter {
-    target: String,
-    level: LevelFilter,
-}
-
-impl SimpleFilter {
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-        metadata.target() == self.target && *metadata.level() <= self.level
-    }
-}
-
-/// Tracing [`Layer`] that captures (optionally filtered) spans.
+/// Tracing [`Layer`] that captures (optionally filtered) spans and events.
 ///
-/// The layer can optionally filter spans by target and/or level, which could be used
-/// instead of per-layer filtering if it's not supported by the subscriber. Keep in mind
-/// that without filtering, `CaptureLayer` can capture a lot of unnecessary spans.
+/// The layer can optionally filter spans and events, which could be used
+/// instead of per-layer filtering if it's not supported by the [`Subscriber`]. Keep in mind
+/// that without filtering, `CaptureLayer` can capture a lot of unnecessary spans / events.
+///
+/// Captured events are [tied](CapturedSpan::events()) to the nearest captured span
+/// in the span hierarchy. If no entered spans are captured when the event is emitted,
+/// the event itself will not be captured.
 ///
 /// # Examples
 ///
 /// See [crate-level docs](index.html) for an example of usage.
-#[derive(Debug)]
-pub struct CaptureLayer {
-    filter: Option<SimpleFilter>,
+pub struct CaptureLayer<S> {
+    filter: Option<Box<dyn Filter<S> + Send + Sync>>,
     storage: Arc<Mutex<Storage>>,
 }
 
-impl CaptureLayer {
+impl<S> fmt::Debug for CaptureLayer<S> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CaptureLayer")
+            .field("filter", &self.filter.as_ref().map(|_| "Filter"))
+            .field("storage", &self.storage)
+            .finish()
+    }
+}
+
+impl<S> CaptureLayer<S>
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
     /// Creates a new layer that will use the specified `storage` to store captured data.
     /// Captured spans are not filtered; like any [`Layer`], filtering can be set up
     /// on the layer or subscriber level.
@@ -228,21 +296,23 @@ impl CaptureLayer {
         }
     }
 
-    /// Specifies filtering for this layer. This can be used for cheap per-layer filtering if
-    /// it is not supported by the tracing subscriber.
+    /// Specifies filtering for this layer. Unlike with [per-layer filtering](Layer::with_filter()),
+    /// the resulting layer will perform filtering for all [`Subscriber`]s, not just [`Registry`].
+    ///
+    /// [`Registry`]: tracing_subscriber::Registry
     #[must_use]
-    pub fn with_filter(mut self, target: impl Into<String>, level: impl Into<LevelFilter>) -> Self {
-        self.filter = Some(SimpleFilter {
-            target: target.into(),
-            level: level.into(),
-        });
+    pub fn with_filter<F>(mut self, filter: F) -> Self
+    where
+        F: Filter<S> + Send + Sync + 'static,
+    {
+        self.filter = Some(Box::new(filter));
         self
     }
 
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+    fn enabled(&self, metadata: &Metadata<'_>, ctx: &Context<'_, S>) -> bool {
         self.filter
-            .as_ref()
-            .map_or(true, |filter| filter.enabled(metadata))
+            .as_deref()
+            .map_or(true, |filter| filter.enabled(metadata, ctx))
     }
 
     fn lock(&self) -> impl ops::DerefMut<Target = Storage> + '_ {
@@ -250,12 +320,12 @@ impl CaptureLayer {
     }
 }
 
-impl<S> Layer<S> for CaptureLayer
+impl<S> Layer<S> for CaptureLayer<S>
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
-        if !self.enabled(attrs.metadata()) {
+        if !self.enabled(attrs.metadata(), &ctx) {
             return;
         }
 
@@ -265,6 +335,7 @@ where
             metadata: attrs.metadata(),
             values: visitor.values,
             stats: SpanStats::default(),
+            events: vec![],
         };
         let idx = self.lock().push_span(span);
         ctx.span(id)
@@ -280,6 +351,27 @@ where
             values.record(&mut visitor);
             self.lock().on_record(idx, visitor.values);
         };
+    }
+
+    fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
+        if !self.enabled(event.metadata(), &ctx) {
+            return;
+        }
+
+        let ancestor_span = if let Some(mut scope) = ctx.event_scope(event) {
+            scope.find_map(|span| span.extensions().get::<SpanIndex>().copied())
+        } else {
+            None
+        };
+        if let Some(SpanIndex(span_idx)) = ancestor_span {
+            let mut visitor = ValueVisitor::default();
+            event.record(&mut visitor);
+            let event = CapturedEvent {
+                metadata: event.metadata(),
+                values: visitor.values,
+            };
+            self.lock().on_event(span_idx, event);
+        }
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {

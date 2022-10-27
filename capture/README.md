@@ -7,8 +7,9 @@
 **Documentation:**
 [![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://slowli.github.io/tracing-toolbox/tracing_capture/)
 
-This crate provides a [tracing] [`Layer`] to capture tracing spans as they occur.
-The captured spans can then be used for testing assertions (e.g., "Did a span
+This crate provides a [tracing] [`Layer`] to capture tracing spans 
+and events as they occur. The captured spans and events
+can then be used for testing assertions (e.g., "Did a span
 with a specific name / target / … occur? What were its fields? Was the span closed?
 How many times the span was entered?" and so on).
 
