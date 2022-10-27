@@ -9,6 +9,7 @@ use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
+    thread,
 };
 
 mod fib;
@@ -24,6 +25,8 @@ struct RecordedEvents {
     long: Vec<TracingEvent>,
 }
 
+// **NB.** Tests calling the `fib` module should block on `EVENTS`; otherwise,
+// the snapshot tests may fail because of the differing ordering of `NewCallSite` events.
 static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
     short: fib::record_events(5),
     long: fib::record_events(80),
@@ -47,8 +50,10 @@ fn event_snapshot() {
 
 #[test]
 fn resource_management_for_tracing_events() {
-    let events = &EVENTS.long;
+    assert_span_management(&EVENTS.long);
+}
 
+fn assert_span_management(events: &[TracingEvent]) {
     let mut alive_spans = HashSet::new();
     let mut open_spans = vec![];
     for event in events {
@@ -247,4 +252,60 @@ fn persisting_spans() {
             }
         }
     });
+}
+
+#[test]
+#[allow(clippy::needless_collect)] // necessary for threads to be concurrent
+fn concurrent_senders() {
+    Lazy::force(&EVENTS);
+
+    let threads: Vec<_> = (5..10)
+        .map(|i| thread::spawn(move || fib::record_events(i)))
+        .collect();
+    let events_by_thread = threads.into_iter().map(|handle| handle.join().unwrap());
+
+    for (idx, events) in events_by_thread.enumerate() {
+        assert_valid_refs(&events);
+        assert_span_management(&events);
+
+        let idx = idx + 5;
+        let new_events: Vec<_> = events
+            .iter()
+            .filter_map(|event| {
+                if let TracingEvent::NewEvent { values, .. } = event {
+                    return values.get("message").and_then(TracedValue::as_debug_str);
+                }
+                None
+            })
+            .collect();
+
+        assert_eq!(new_events.len(), idx + 2, "{new_events:?}");
+        assert_eq!(new_events[0], "count looks somewhat large");
+        assert_eq!(new_events[idx + 1], "computed Fibonacci number");
+        for &new_event in &new_events[1..=idx] {
+            assert_eq!(new_event, "performing iteration");
+        }
+    }
+}
+
+fn assert_valid_refs(events: &[TracingEvent]) {
+    let mut call_site_ids = HashSet::new();
+    let mut span_ids = HashSet::new();
+    for event in events {
+        match event {
+            TracingEvent::NewCallSite { id, .. } => {
+                assert!(call_site_ids.insert(*id));
+            }
+            TracingEvent::NewSpan {
+                id, metadata_id, ..
+            } => {
+                assert!(span_ids.insert(*id));
+                assert!(call_site_ids.contains(metadata_id));
+            }
+            TracingEvent::NewEvent { metadata_id, .. } => {
+                assert!(call_site_ids.contains(metadata_id));
+            }
+            _ => { /* do nothing */ }
+        }
+    }
 }

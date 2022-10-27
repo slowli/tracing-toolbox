@@ -407,6 +407,15 @@ impl TracedValue {
         }
     }
 
+    /// Returns value as a [`Debug`](fmt::Debug) string output, or `None` if this value
+    /// is not [`Self::Object`].
+    pub fn as_debug_str(&self) -> Option<&str> {
+        match self {
+            Self::Object(value) => Some(&value.0),
+            _ => None,
+        }
+    }
+
     fn error(err: &(dyn error::Error + 'static)) -> Self {
         Self::Error(TracedError::new(err))
     }

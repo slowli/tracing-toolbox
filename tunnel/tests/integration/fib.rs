@@ -1,9 +1,6 @@
 use tracing::field;
 
-use std::{
-    error, fmt,
-    sync::{Arc, Mutex},
-};
+use std::{error, fmt, sync::mpsc};
 
 use tracing_tunnel::{TracingEvent, TracingEventSender};
 
@@ -49,15 +46,14 @@ pub fn fib(count: usize) {
     }
 }
 
-/// **NB.** Must be called once per program run; otherwise, call sites will be missing
-/// on subsequent runs.
 pub fn record_events(count: usize) -> Vec<TracingEvent> {
-    let events = Arc::new(Mutex::new(vec![]));
-    let events_ = Arc::clone(&events);
-    let recorder = TracingEventSender::new(move |event| {
-        events_.lock().unwrap().push(event);
+    let (events_sx, events_rx) = mpsc::sync_channel(256);
+    // ^ The channel capacity should allow for *all* events since we start collecting events
+    // after they all are emitted.
+    let sender = TracingEventSender::new(move |event| {
+        events_sx.send(event).unwrap();
     });
 
-    tracing::subscriber::with_default(recorder, || fib(count));
-    Arc::try_unwrap(events).unwrap().into_inner().unwrap()
+    tracing::subscriber::with_default(sender, || fib(count));
+    events_rx.iter().collect()
 }

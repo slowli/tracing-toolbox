@@ -56,13 +56,17 @@ struct Inner {
 }
 
 impl Inner {
-    fn register_site(&mut self, metadata: &'static Metadata<'static>) -> MetadataId {
+    /// Returns metadata ID together with a flag whether it is new.
+    fn register_site(&mut self, metadata: &'static Metadata<'static>) -> (MetadataId, bool) {
         let site_id = metadata.callsite();
-        debug_assert!(self.call_sites.get(&site_id).is_none());
+        if let Some(&metadata_id) = self.call_sites.get(&site_id) {
+            return (metadata_id, false);
+        }
+
         let metadata_id = self.next_metadata_id;
         self.next_metadata_id += 1;
         self.call_sites.insert(site_id, metadata_id);
-        metadata_id
+        (metadata_id, true)
     }
 }
 
@@ -103,6 +107,28 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
         self.inner.write().unwrap()
     }
 
+    fn metadata_id(&self, metadata: &'static Metadata<'static>) -> MetadataId {
+        let maybe_metadata_id = self
+            .lock_read()
+            .call_sites
+            .get(&metadata.callsite())
+            .copied();
+        maybe_metadata_id.unwrap_or_else(|| {
+            let mut lock = self.lock_write();
+            let (id, is_new) = lock.register_site(metadata);
+            if is_new {
+                // **NB.** It is imperative that the write lock is held here!
+                // Otherwise, event emission may be reordered (`NewCallSite` after
+                // a `NewSpan` / `NewEvent` referencing it).
+                self.send(TracingEvent::NewCallSite {
+                    id,
+                    data: CallSiteData::from(metadata),
+                });
+            }
+            id
+        })
+    }
+
     fn send(&self, event: TracingEvent) {
         (self.on_event)(event);
     }
@@ -110,20 +136,16 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
 
 impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
     fn register_callsite(&self, metadata: &'static Metadata<'static>) -> Interest {
-        let metadata_id = self.lock_write().register_site(metadata);
-        self.send(TracingEvent::NewCallSite {
-            id: metadata_id,
-            data: CallSiteData::from(metadata),
-        });
+        self.metadata_id(metadata); // registers metadata if necessary
         Interest::always()
     }
 
     fn enabled(&self, _metadata: &Metadata<'_>) -> bool {
-        true // FIXME: reasonable implementation
+        true
     }
 
     fn new_span(&self, span: &Attributes<'_>) -> Id {
-        let metadata_id = self.lock_read().call_sites[&span.metadata().callsite()];
+        let metadata_id = self.metadata_id(span.metadata());
         let span_id = self.next_span_id.fetch_add(1, Ordering::SeqCst);
         self.send(TracingEvent::new_span(span, metadata_id, span_id));
         Id::from_u64(span_id)
@@ -141,7 +163,7 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
     }
 
     fn event(&self, event: &Event<'_>) {
-        let metadata_id = self.lock_read().call_sites[&event.metadata().callsite()];
+        let metadata_id = self.metadata_id(event.metadata());
         self.send(TracingEvent::new_event(event, metadata_id));
     }
 
