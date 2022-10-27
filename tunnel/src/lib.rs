@@ -121,3 +121,6 @@ pub use crate::types::{
     CallSiteData, CallSiteKind, DebugObject, MetadataId, RawSpanId, TracedError, TracedValue,
     TracedValues, TracingEvent, TracingLevel, ValueVisitor,
 };
+
+#[cfg(doctest)]
+doc_comment::doctest!("../README.md");

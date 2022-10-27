@@ -38,6 +38,54 @@ tracing-tunnel = "0.1.0"
 Note that the both pieces of functionality described above are gated behind opt-in features;
 consult the crate docs for details.
 
+### Sending tracing events
+
+```rust
+use std::sync::mpsc;
+use tracing_tunnel::{TracingEvent, TracingEventSender, TracingEventReceiver};
+
+// Let's collect tracing events using an MPSC channel.
+let (events_sx, events_rx) = mpsc::sync_channel(10);
+let subscriber = TracingEventSender::new(move |event| {
+    events_sx.send(event).ok();
+});
+
+tracing::subscriber::with_default(subscriber, || {
+    tracing::info_span!("test", num = 42_i64).in_scope(|| {
+        tracing::warn!("I feel disturbance in the Force...");
+    });
+});
+
+let events: Vec<TracingEvent> = events_rx.iter().collect();
+println!("{events:?}");
+// Do something with events...
+```
+
+### Receiving tracing events
+
+```rust
+use std::sync::mpsc;
+use tracing_tunnel::{PersistedMetadata, TracingEvent, TracingEventReceiver};
+
+tracing_subscriber::fmt().pretty().init();
+
+fn replay_events(events: &[TracingEvent]) {
+    let mut receiver = TracingEventReceiver::default();
+    for event in events {
+        if let Err(err) = receiver.try_receive(event.clone()) {
+            tracing::warn!(%err, "received invalid tracing event");
+        }
+    }
+
+    // Persist the resulting receiver state. There are two pieces
+    // of the state: metadata and alive spans.
+    let mut metadata = PersistedMetadata::default();
+    receiver.persist_metadata(&mut metadata);
+    let spans = receiver.persist_spans(); 
+    // Store `metadata` and `spans`, e.g., in a DB
+}
+```
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE)

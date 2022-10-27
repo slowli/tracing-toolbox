@@ -21,6 +21,38 @@ Add this to your `Crate.toml`:
 tracing-capture = "0.1.0"
 ```
 
+### Capturing spans for test assertions
+
+```rust
+use tracing::Level;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_capture::{CaptureLayer, SharedStorage};
+
+let subscriber = tracing_subscriber::fmt()
+    .pretty()
+    .with_max_level(Level::INFO)
+    .finish();
+// Add the capturing layer.
+let storage = SharedStorage::default();
+let subscriber = subscriber.with(CaptureLayer::new(&storage));
+
+// Capture tracing information.
+tracing::subscriber::with_default(subscriber, || {
+    tracing::info_span!("test", num = 42_i64).in_scope(|| {
+        tracing::warn!("I feel disturbance in the Force...");
+    });
+});
+
+// Inspect the only captured span.
+let storage = storage.lock();
+let span = storage.spans()
+    .find(|span| span.metadata().name() == "test")
+    .unwrap();
+assert_eq!(span["num"], 42_i64);
+assert_eq!(span.stats().entered, 1);
+assert!(span.stats().is_closed);
+```
+
 ## Alternatives / similar tools
 
 [`tracing-test`] is a lower-level alternative. [`tracing-fluent-assertions`] is more

@@ -16,6 +16,7 @@ tracing-core = "0.1.30"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
+doc-comment = "0.3.3"
 insta = { version = "1.21.0", features = ["yaml"] }
 serde_json = "1"
 tracing = "0.1.37"
