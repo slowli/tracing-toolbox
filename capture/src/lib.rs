@@ -1,7 +1,7 @@
-//! Capturing tracing spans, e.g. for testing purposes.
+//! Capturing tracing spans and events, e.g. for testing purposes.
 //!
 //! The core type in this crate is [`CaptureLayer`], a tracing [`Layer`] that can be used
-//! to capture tracing spans.
+//! to capture tracing spans and events.
 //!
 //! # Examples
 //!
@@ -27,9 +27,8 @@
 //!
 //! // Inspect the only captured span.
 //! let storage = storage.lock();
-//! let span = storage.spans()
-//!     .find(|span| span.metadata().name() == "test")
-//!     .unwrap();
+//! assert_eq!(storage.spans().len(), 1);
+//! let span = &storage.spans()[0];
 //! assert_eq!(span["num"], 42_i64);
 //! assert_eq!(span.stats().entered, 1);
 //! assert!(span.stats().is_closed);
@@ -179,21 +178,34 @@ impl ops::Index<&str> for CapturedSpan {
 #[derive(Debug)]
 pub struct Storage {
     spans: Vec<CapturedSpan>,
+    root_events: Vec<CapturedEvent>,
 }
 
 impl Storage {
     fn new() -> Self {
-        Self { spans: vec![] }
+        Self {
+            spans: vec![],
+            root_events: vec![],
+        }
     }
 
-    /// Iterates over all captured spans in the order of capture.
-    pub fn spans(&self) -> impl Iterator<Item = &CapturedSpan> + '_ {
-        self.spans.iter()
+    /// Returns captured spans in the order of capture.
+    pub fn spans(&self) -> &[CapturedSpan] {
+        &self.spans
+    }
+
+    /// Returns captured root events (i.e., events that were emitted when no captured span
+    /// was entered) in the order of capture.
+    pub fn root_events(&self) -> &[CapturedEvent] {
+        &self.root_events
     }
 
     /// Iterates over all captured events. The order of iteration is not specified.
     pub fn all_events(&self) -> impl Iterator<Item = &CapturedEvent> + '_ {
-        self.spans.iter().flat_map(CapturedSpan::events)
+        self.spans
+            .iter()
+            .flat_map(CapturedSpan::events)
+            .chain(&self.root_events)
     }
 
     fn push_span(&mut self, span: CapturedSpan) -> usize {
@@ -222,9 +234,13 @@ impl Storage {
         span.values.extend(values);
     }
 
-    fn on_event(&mut self, span_idx: usize, event: CapturedEvent) {
-        let span = self.spans.get_mut(span_idx).unwrap();
-        span.events.push(event);
+    fn on_event(&mut self, span_idx: Option<usize>, event: CapturedEvent) {
+        if let Some(span_idx) = span_idx {
+            let span = self.spans.get_mut(span_idx).unwrap();
+            span.events.push(event);
+        } else {
+            self.root_events.push(event);
+        }
     }
 }
 
@@ -242,10 +258,10 @@ impl Default for SharedStorage {
     }
 }
 
+#[allow(clippy::missing_panics_doc)] // lock poisoning propagation
 impl SharedStorage {
     /// Locks the underlying [`Storage`] for exclusive access. While the lock is held,
     /// capturing cannot progress; beware of deadlocks!
-    #[allow(clippy::missing_panics_doc)]
     pub fn lock(&self) -> impl ops::Deref<Target = Storage> + '_ {
         self.inner.lock().unwrap()
     }
@@ -256,13 +272,14 @@ struct SpanIndex(usize);
 
 /// Tracing [`Layer`] that captures (optionally filtered) spans and events.
 ///
-/// The layer can optionally filter spans and events, which could be used
-/// instead of per-layer filtering if it's not supported by the [`Subscriber`]. Keep in mind
-/// that without filtering, `CaptureLayer` can capture a lot of unnecessary spans / events.
+/// The layer can optionally filter spans and events in addition to global [`Subscriber`] filtering.
+/// This could be used instead of per-layer filtering if it's not supported by the `Subscriber`.
+/// Keep in mind that without filtering, `CaptureLayer` can capture a lot of
+/// unnecessary spans / events.
 ///
 /// Captured events are [tied](CapturedSpan::events()) to the nearest captured span
 /// in the span hierarchy. If no entered spans are captured when the event is emitted,
-/// the event itself will not be captured.
+/// the event will be captured in [`Storage::root_events()`].
 ///
 /// # Examples
 ///
@@ -363,15 +380,14 @@ where
         } else {
             None
         };
-        if let Some(SpanIndex(span_idx)) = ancestor_span {
-            let mut visitor = ValueVisitor::default();
-            event.record(&mut visitor);
-            let event = CapturedEvent {
-                metadata: event.metadata(),
-                values: visitor.values,
-            };
-            self.lock().on_event(span_idx, event);
-        }
+        let span_idx = ancestor_span.map(|idx| idx.0);
+        let mut visitor = ValueVisitor::default();
+        event.record(&mut visitor);
+        let event = CapturedEvent {
+            metadata: event.metadata(),
+            values: visitor.values,
+        };
+        self.lock().on_event(span_idx, event);
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {

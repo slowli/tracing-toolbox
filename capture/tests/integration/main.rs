@@ -57,7 +57,7 @@ fn replayed_spans_are_closed_if_entered_multiple_times() {
     });
 
     let storage = storage.lock();
-    let span = storage.spans().next().unwrap();
+    let span = &storage.spans()[0];
     assert_eq!(span.stats().entered, 2);
     assert_eq!(span.stats().exited, 2);
     assert!(span.stats().is_closed);
@@ -75,6 +75,7 @@ fn capturing_spans_directly() {
 fn assert_captured_spans(storage: &Storage) {
     let fib_span = storage
         .spans()
+        .iter()
         .find(|span| span.metadata().name() == "compute")
         .unwrap();
     assert_eq!(fib_span.metadata().target(), "fib");
@@ -97,7 +98,7 @@ fn assert_captured_spans(storage: &Storage) {
     assert_eq!(*return_event.metadata().level(), Level::INFO);
     assert!(return_event["return"].is_debug(&5));
 
-    let outer_span = storage.spans().next().unwrap();
+    let outer_span = &storage.spans()[0];
     assert_eq!(outer_span.metadata().name(), "fib");
     assert_eq!(outer_span["approx"], 5.0_f64);
     assert_eq!(outer_span.events().len(), 2);
@@ -138,15 +139,18 @@ fn capturing_events_with_indirect_ancestor() {
     let subscriber = Registry::default().with(layer);
     tracing::subscriber::with_default(subscriber, || {
         tracing::info_span!("wrapper").in_scope(|| double(5));
-        // The event in this span is not captured because it doesn't have a captured
-        // ancestor span.
+        // The event in this span is captured as a root event.
         tracing::debug_span!("debug_wrapper").in_scope(|| double(-3));
     });
 
     let storage = storage.lock();
-    assert_eq!(storage.spans().count(), 1);
-    let events: Vec<_> = storage.all_events().collect();
-    assert_eq!(events.len(), 1);
-    assert!(events[0].value("message").is_some());
-    assert_eq!(events[0]["value"], 5_i64);
+    assert_eq!(storage.spans().len(), 1);
+    assert_eq!(storage.all_events().count(), 2);
+    let span_events = storage.spans()[0].events();
+    assert_eq!(span_events.len(), 1);
+    assert!(span_events[0].value("message").is_some());
+    assert_eq!(span_events[0]["value"], 5_i64);
+    let root_events = storage.root_events();
+    assert_eq!(root_events.len(), 1);
+    assert_eq!(root_events[0]["value"], -3_i64);
 }

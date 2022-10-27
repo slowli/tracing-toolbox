@@ -46,9 +46,8 @@ tracing::subscriber::with_default(subscriber, || {
 
 // Inspect the only captured span.
 let storage = storage.lock();
-let span = storage.spans()
-    .find(|span| span.metadata().name() == "test")
-    .unwrap();
+assert_eq!(storage.spans().len(), 1);
+let span = &storage.spans()[0];
 assert_eq!(span["num"], 42_i64);
 assert_eq!(span.stats().entered, 1);
 assert!(span.stats().is_closed);

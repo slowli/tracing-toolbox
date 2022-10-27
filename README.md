@@ -8,8 +8,8 @@ Currently, the following tools are included:
 
 - [`tracing-tunnel`](tunnel): Provides a tunnel to pass tracing information across
   an API boundary (such as the WASM client–host boundary).
-- [`tracing-capture`](capture): Allows capturing tracing spans, e.g. to assert against
-  in tests.
+- [`tracing-capture`](capture): Allows capturing tracing spans and events,
+  e.g. to use in test assertions.
 
 ## License
 
