@@ -1,7 +1,6 @@
 //! Integration tests for Tardigrade tracing infrastructure.
 
 use assert_matches::assert_matches;
-use insta::assert_yaml_snapshot;
 use once_cell::sync::Lazy;
 use tracing_core::{Level, Subscriber};
 use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
@@ -32,6 +31,7 @@ static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
     long: fib::record_events(80),
 });
 
+#[cfg(unix)] // The snapshot contains OS-specific path delimiters
 #[test]
 fn event_snapshot() {
     let mut events = EVENTS.short.clone();
@@ -45,7 +45,7 @@ fn event_snapshot() {
             }
         }
     }
-    assert_yaml_snapshot!("events-fib-5", events);
+    insta::assert_yaml_snapshot!("events-fib-5", events);
 }
 
 #[test]
