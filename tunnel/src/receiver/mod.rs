@@ -162,12 +162,23 @@ macro_rules! create_value_set {
 /// a workflow is executed. It relays tracing events from the workflow logic (executed in WASM)
 /// to the host.
 ///
+/// # ⚠ Resource consumption
+///
+/// To fit the API of the [`tracing-core`] crate, the receiver leaks string parts
+/// of [`CallSiteData`]: we need a `&'static str` when we only have a `String`. Steps are taken
+/// to limit the amount of leaked memory; we use a `static` string arena which checks whether
+/// a particular string was already leaked, and reuses the existing `&'static str` if possible.
+/// Still, this has negative implications regarding both memory consumption and performance,
+/// so you probably should limit the number of executables to use with a `TracingEventReceiver`.
+/// The number of *executions* of each executable is not a limiting factor.
+///
 /// # Examples
 ///
 /// See [crate-level docs](index.html) for an example of usage.
 ///
 /// [`TracingEventSender`]: crate::TracingEventSender
 /// [the Tardigrade runtime]: https://docs.rs/tardigrade-rt/
+/// [`tracing-core`]: https://docs.rs/tracing-core/
 #[derive(Debug, Default)]
 pub struct TracingEventReceiver {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,

@@ -13,6 +13,8 @@ use std::{
 
 use crate::types::{CallSiteData, CallSiteKind, TracingLevel};
 
+// An emulation of a hash map with keys equivalent to `CallSiteData` (obviously,
+// we don't want to store `CallSiteData` explicitly because of its size).
 type MetadataMap = HashMap<u64, Vec<&'static Metadata<'static>>>;
 
 impl From<TracingLevel> for Level {

@@ -8,7 +8,7 @@
 [![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://slowli.github.io/tracing-toolbox/tracing_tunnel/)
 
 This crate provides [tracing] infrastructure helpers allowing to transfer tracing events
-across API boundary:
+across an API boundary:
 
 - `TracingEventSender` is a tracing [`Subscriber`] that converts tracing events
   into (de)serializable presentation that can be sent elsewhere using a customizable hook.
@@ -18,13 +18,12 @@ across API boundary:
   of the program encapsulating the receiver. To deal with this, the receiver provides
   the means to persist / restore its state.
 
-Both components are used by the [Tardigrade][`tardigrade`] workflows, in case of which
-the API boundary is the WASM client–host boundary.
+This solves the problem of having *dynamic* call sites for tracing spans / events, 
+i.e., ones not known during compilation. This may occur if call sites
+are defined in dynamically loaded modules, the execution of which is embedded into the program,
+e.g., WASM modules.
 
-- The [`tardigrade`] client library uses `TracingEventSender` to send tracing events
-  from a workflow (i.e., a WASM module instance) to the host using a WASM import function.
-- [The Tardigrade runtime] uses `TracingEventReceiver` to pass traces from the workflow
-  to the host tracing infrastructure.
+See the crate docs for the details about the crate design and potential use cases.
 
 ## Usage
 

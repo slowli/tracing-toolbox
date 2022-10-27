@@ -11,6 +11,34 @@
 //!   of the program encapsulating the receiver. To deal with this, the receiver provides
 //!   the means to persist / restore its state.
 //!
+//! [`tardigrade`]: https://docs.rs/tardigrade
+//! [The Tardigrade runtime]: https://docs.rs/tardigrade-rt
+//!
+//! # When is this needed?
+//!
+//! This crate solves the problem of having *dynamic* call sites for tracing
+//! spans / events, i.e., ones not known during compilation. This may occur if call sites
+//! are defined in dynamically loaded modules, the execution of which is embedded into the program,
+//! e.g., WASM modules.
+//!
+//! It *could* be feasible to treat such a module as a separate program and
+//! collect / analyze its traces in conjunction with host traces using distributed tracing software
+//! (e.g., [OpenTelemetry] / [Jaeger]). However, this would significantly bloat the API surface
+//! of the module, bloat its dependency tree, and would arguably break encapsulation.
+//!
+//! The approach proposed in this crate keeps the module API as simple as possible: essentially,
+//! a single function to smuggle [`TracingEvent`]s through the client–host boundary.
+//! The client side (i.e., the [`TracingEventSender`]) is almost stateless;
+//! it just streams tracing events to the host, which can have tracing logic as complex as required.
+//!
+//! Another problem that this crate solves is having module executions that can outlive
+//! the host program. For example, WASM module instances can be fully persisted and resumed later,
+//! potentially after the host is restarted. To solve this, [`TracingEventReceiver`] allows
+//! persisting call site data and alive spans, and resuming from the previously saved state
+//! (notifying the tracing infra about call sites / spans if necessary).
+//!
+//! ## Use case: workflow automation
+//!
 //! Both components are used by the [Tardigrade][`tardigrade`] workflows, in case of which
 //! the API boundary is the WASM client–host boundary.
 //!
@@ -19,10 +47,10 @@
 //! - [The Tardigrade runtime] uses [`TracingEventReceiver`] to pass traces from the workflow
 //!   to the host tracing infrastructure.
 //!
-//! [`tardigrade`]: https://docs.rs/tardigrade
 //! [tracing]: https://docs.rs/tracing/0.1/tracing
 //! [`Subscriber`]: tracing_core::Subscriber
-//! [The Tardigrade runtime]: https://docs.rs/tardigrade-rt
+//! [OpenTelemetry]: https://opentelemetry.io/
+//! [Jaeger]: https://www.jaegertracing.io/
 //!
 //! # Crate features
 //!
