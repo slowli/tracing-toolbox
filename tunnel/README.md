@@ -103,7 +103,7 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in `tracing-toolbox` by you, as defined in the Apache-2.0 license,
 shall be dual licensed as above, without any additional terms or conditions.
 
-[`tardigrade`]: https://crates.io/crates/tardigrade
+[`tardigrade`]: https://github.com/slowli/tardigrade
 [tracing]: https://docs.rs/tracing/0.1/tracing
 [`Subscriber`]: https://docs.rs/tracing-core/0.1/tracing_core/trait.Subscriber.html
-[The Tardigrade runtime]: https://crates.io/crates/tardigrade-rt
+[The Tardigrade runtime]: https://github.com/slowli/tardigrade

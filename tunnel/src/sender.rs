@@ -52,7 +52,7 @@ impl TracingEvent {
 /// See [crate-level docs](index.html) for an example of usage.
 ///
 /// [presentation]: TracingEvent
-/// [Tardigrade client library]: https://docs.rs/tardigrade
+/// [Tardigrade client library]: https://github.com/slowli/tardigrade
 #[derive(Debug)]
 pub struct TracingEventSender<F = fn(TracingEvent)> {
     next_span_id: AtomicU64,

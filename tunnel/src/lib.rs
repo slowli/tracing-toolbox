@@ -11,9 +11,6 @@
 //!   of the program encapsulating the receiver. To deal with this, the receiver provides
 //!   the means to persist / restore its state.
 //!
-//! [`tardigrade`]: https://docs.rs/tardigrade
-//! [The Tardigrade runtime]: https://docs.rs/tardigrade-rt
-//!
 //! # When is this needed?
 //!
 //! This crate solves the problem of having *dynamic* call sites for tracing
@@ -51,6 +48,8 @@
 //! [`Subscriber`]: tracing_core::Subscriber
 //! [OpenTelemetry]: https://opentelemetry.io/
 //! [Jaeger]: https://www.jaegertracing.io/
+//! [`tardigrade`]: https://github.com/slowli/tardigrade
+//! [The Tardigrade runtime]: https://github.com/slowli/tardigrade
 //!
 //! # Crate features
 //!

@@ -206,7 +206,7 @@ macro_rules! create_value_set {
 /// See [crate-level docs](index.html) for an example of usage.
 ///
 /// [`TracingEventSender`]: crate::TracingEventSender
-/// [the Tardigrade runtime]: https://docs.rs/tardigrade-rt/
+/// [the Tardigrade runtime]: https://github.com/slowli/tardigrade
 /// [`tracing-core`]: https://docs.rs/tracing-core/
 #[derive(Debug)]
 pub struct TracingEventReceiver<'sp> {
