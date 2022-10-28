@@ -15,9 +15,7 @@ mod arena;
 mod tests;
 
 use self::arena::ARENA;
-use crate::{
-    serde_helpers, CallSiteData, MetadataId, RawSpanId, TracedValue, TracedValues, TracingEvent,
-};
+use crate::{CallSiteData, MetadataId, RawSpanId, TracedValue, TracedValues, TracingEvent};
 
 enum CowValue<'a> {
     Borrowed(&'a dyn Value),
@@ -59,12 +57,13 @@ impl TracedValue {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SpanInfo {
-    #[serde(with = "serde_helpers::span_id")]
-    local_id: Id,
+#[derive(Debug, Serialize, Deserialize)]
+struct SpanData {
     metadata_id: MetadataId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_id: Option<RawSpanId>,
     ref_count: usize,
+    values: TracedValues<String>,
 }
 
 /// Information about span / event [`Metadata`] that is [serializable] and thus
@@ -76,14 +75,10 @@ struct SpanInfo {
 /// share `PersistedMetadata`.
 ///
 /// [serializable]: https://docs.rs/serde/1/serde
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersistedMetadata {
     inner: HashMap<MetadataId, CallSiteData>,
-    // Was this metadata injected into the `tracing` runtime? This should happen the first
-    // time the `PersistedMetadata` is used.
-    #[serde(skip, default)]
-    is_injected: bool,
 }
 
 impl PersistedMetadata {
@@ -102,11 +97,13 @@ impl PersistedMetadata {
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersistedSpans {
-    inner: HashMap<RawSpanId, SpanInfo>,
-    // Were these spans injected into the `tracing` runtime? This should happen the first
-    // time the `PersistedSpans` are used.
-    #[serde(skip, default)]
-    is_injected: bool,
+    inner: HashMap<RawSpanId, SpanData>,
+}
+
+/// FIXME
+#[derive(Debug, Default)]
+pub struct LocalSpans {
+    inner: HashMap<RawSpanId, Id>,
 }
 
 /// Error processing a [`TracingEvent`] by a [`TracingEventReceiver`].
@@ -179,27 +176,32 @@ macro_rules! create_value_set {
 /// [`TracingEventSender`]: crate::TracingEventSender
 /// [the Tardigrade runtime]: https://docs.rs/tardigrade-rt/
 /// [`tracing-core`]: https://docs.rs/tracing-core/
-#[derive(Debug, Default)]
-pub struct TracingEventReceiver {
+#[derive(Debug)]
+pub struct TracingEventReceiver<'sp> {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
-    spans: HashMap<RawSpanId, SpanInfo>,
+    spans: &'sp mut PersistedSpans,
+    local_spans: &'sp mut LocalSpans,
 }
 
-impl TracingEventReceiver {
+impl<'sp> TracingEventReceiver<'sp> {
     /// Maximum supported number of values in a span or event.
     const MAX_VALUES: usize = 32;
 
     /// Restores the consumer from the persisted `metadata` and tracing `spans`.
-    pub fn new(metadata: &mut PersistedMetadata, spans: &mut PersistedSpans) -> Self {
-        let mut this = Self::default();
+    pub fn new(
+        metadata: PersistedMetadata,
+        spans: &'sp mut PersistedSpans,
+        local_spans: &'sp mut LocalSpans,
+    ) -> Self {
+        let mut this = Self {
+            metadata: HashMap::new(),
+            spans,
+            local_spans,
+        };
 
-        for (&id, data) in &metadata.inner {
-            this.on_new_call_site(id, data.clone(), !metadata.is_injected);
+        for (id, data) in metadata.inner {
+            this.on_new_call_site(id, data);
         }
-        metadata.is_injected = true;
-
-        this.spans = spans.inner.clone();
-        spans.is_injected = true; // FIXME: handle span registration
         this
     }
 
@@ -214,11 +216,34 @@ impl TracingEventReceiver {
             .ok_or(ReceiveError::UnknownMetadataId(id))
     }
 
-    fn map_span_id(&self, remote_id: RawSpanId) -> Result<&Id, ReceiveError> {
+    fn span(&self, id: RawSpanId) -> Result<&SpanData, ReceiveError> {
         self.spans
-            .get(&remote_id)
-            .map(|span| &span.local_id)
-            .ok_or(ReceiveError::UnknownSpanId(remote_id))
+            .inner
+            .get(&id)
+            .ok_or(ReceiveError::UnknownSpanId(id))
+    }
+
+    fn span_mut(&mut self, id: RawSpanId) -> Result<&mut SpanData, ReceiveError> {
+        self.spans
+            .inner
+            .get_mut(&id)
+            .ok_or(ReceiveError::UnknownSpanId(id))
+    }
+
+    /// Returns `Ok(None)` if the local span ID is (validly) not set yet, and `Err(_)`
+    /// if it must have been set by this point.
+    fn map_span_id(&self, remote_id: RawSpanId) -> Result<Option<&Id>, ReceiveError> {
+        match self.local_spans.inner.get(&remote_id) {
+            Some(local_id) => Ok(Some(local_id)),
+            None => {
+                // Check if the the referenced span is alive.
+                if self.spans.inner.contains_key(&remote_id) {
+                    Ok(None)
+                } else {
+                    Err(ReceiveError::UnknownSpanId(remote_id))
+                }
+            }
+        }
     }
 
     fn ensure_values_len(values: &TracedValues<String>) -> Result<(), ReceiveError> {
@@ -265,12 +290,32 @@ impl TracingEventReceiver {
         )
     }
 
-    fn on_new_call_site(&mut self, id: MetadataId, data: CallSiteData, register: bool) {
-        let metadata = ARENA.alloc_metadata(data);
+    fn on_new_call_site(&mut self, id: MetadataId, data: CallSiteData) {
+        let (metadata, is_new) = ARENA.alloc_metadata(data);
         self.metadata.insert(id, metadata);
-        if register {
+        if is_new {
             Self::dispatch(|dispatch| dispatch.register_callsite(metadata));
         }
+    }
+
+    fn create_local_span(&self, data: &SpanData) -> Result<Id, ReceiveError> {
+        let metadata = self.metadata(data.metadata_id)?;
+        let local_parent_id = data
+            .parent_id
+            .map(|parent_id| self.map_span_id(parent_id))
+            .transpose()?
+            .flatten();
+
+        let value_set = Self::generate_fields(metadata, &data.values);
+        let value_set = Self::expand_fields(&value_set);
+        let value_set = Self::create_values(metadata.fields(), &value_set);
+        let attributes = if let Some(local_parent_id) = local_parent_id {
+            Attributes::child_of(local_parent_id.clone(), metadata, &value_set)
+        } else {
+            Attributes::new(metadata, &value_set)
+        };
+
+        Ok(Self::dispatch(|dispatch| dispatch.new_span(&attributes)))
     }
 
     /// Tries to consume an event and relays it to the tracing infrastructure.
@@ -283,11 +328,11 @@ impl TracingEventReceiver {
     /// not a [`TracingEventSender`]).
     ///
     /// [`TracingEventSender`]: crate::TracingEventSender
-    #[allow(clippy::missing_panics_doc)] // false positive
+    #[allow(clippy::missing_panics_doc, clippy::map_entry)] // false positive
     pub fn try_receive(&mut self, event: TracingEvent) -> Result<(), ReceiveError> {
         match event {
             TracingEvent::NewCallSite { id, data } => {
-                self.on_new_call_site(id, data, true);
+                self.on_new_call_site(id, data);
             }
 
             TracingEvent::NewSpan {
@@ -298,74 +343,78 @@ impl TracingEventReceiver {
             } => {
                 Self::ensure_values_len(&values)?;
 
-                let metadata = self.metadata(metadata_id)?;
-                let values = Self::generate_fields(metadata, &values);
-                let values = Self::expand_fields(&values);
-                let values = Self::create_values(metadata.fields(), &values);
-                let attributes = if let Some(parent_id) = parent_id {
-                    let local_parent_id = self.map_span_id(parent_id)?;
-                    Attributes::child_of(local_parent_id.clone(), metadata, &values)
-                } else {
-                    Attributes::new(metadata, &values)
+                let data = SpanData {
+                    metadata_id,
+                    parent_id,
+                    ref_count: 1,
+                    values,
                 };
-
-                // If the dispatcher is gone, we'll just stop recording any spans.
-                let local_id = Self::dispatch(|dispatch| dispatch.new_span(&attributes));
-                self.spans.insert(
-                    id,
-                    SpanInfo {
-                        local_id,
-                        metadata_id,
-                        ref_count: 1,
-                    },
-                );
+                if !self.local_spans.inner.contains_key(&id) {
+                    let local_id = self.create_local_span(&data)?;
+                    self.local_spans.inner.insert(id, local_id);
+                }
+                self.spans.inner.insert(id, data);
             }
 
             TracingEvent::FollowsFrom { id, follows_from } => {
                 let local_id = self.map_span_id(id)?;
                 let local_follows_from = self.map_span_id(follows_from)?;
-                Self::dispatch(|dispatch| {
-                    dispatch.record_follows_from(local_id, local_follows_from);
-                });
+
+                // TODO: properly handle remaining cases
+                if let (Some(id), Some(follows_from)) = (local_id, local_follows_from) {
+                    Self::dispatch(|dispatch| {
+                        dispatch.record_follows_from(id, follows_from);
+                    });
+                }
             }
             TracingEvent::SpanEntered { id } => {
-                let local_id = self.map_span_id(id)?;
-                Self::dispatch(|dispatch| dispatch.enter(local_id));
+                let local_id = if let Some(id) = self.map_span_id(id)? {
+                    id.clone()
+                } else {
+                    let data = self.span(id)?;
+                    let local_id = self.create_local_span(data)?;
+                    self.local_spans.inner.insert(id, local_id.clone());
+                    local_id
+                };
+                Self::dispatch(|dispatch| dispatch.enter(&local_id));
             }
             TracingEvent::SpanExited { id } => {
-                let local_id = self.map_span_id(id)?;
+                let local_id = self
+                    .map_span_id(id)?
+                    .ok_or(ReceiveError::UnknownSpanId(id))?;
+                // ^ In valid event sequences, the local ID must have been set previously
+                // by a `SpanEntered` event.
                 Self::dispatch(|dispatch| dispatch.exit(local_id));
             }
             TracingEvent::SpanCloned { id } => {
-                let span = self
-                    .spans
-                    .get_mut(&id)
-                    .ok_or(ReceiveError::UnknownSpanId(id))?;
+                let span = self.span_mut(id)?;
                 span.ref_count += 1;
                 // Dispatcher is intentionally not called: we handle ref counting locally.
             }
             TracingEvent::SpanDropped { id } => {
-                let span = self
-                    .spans
-                    .get_mut(&id)
-                    .ok_or(ReceiveError::UnknownSpanId(id))?;
+                let span = self.span_mut(id)?;
                 span.ref_count -= 1;
                 if span.ref_count == 0 {
-                    let local_id = self.spans.remove(&id).unwrap().local_id;
-                    Self::dispatch(|dispatch| dispatch.try_close(local_id.clone()));
+                    self.spans.inner.remove(&id);
+                    if let Some(local_id) = self.local_spans.inner.remove(&id) {
+                        Self::dispatch(|dispatch| dispatch.try_close(local_id.clone()));
+                    }
                 }
             }
 
             TracingEvent::ValuesRecorded { id, values } => {
                 Self::ensure_values_len(&values)?;
 
-                let local_id = self.map_span_id(id)?;
-                let metadata = self.metadata(self.spans[&id].metadata_id)?;
-                let values = Self::generate_fields(metadata, &values);
-                let values = Self::expand_fields(&values);
-                let values = Self::create_values(metadata.fields(), &values);
-                let values = Record::new(&values);
-                Self::dispatch(|dispatch| dispatch.record(local_id, &values));
+                if let Some(local_id) = self.map_span_id(id)? {
+                    let metadata = self.metadata(self.spans.inner[&id].metadata_id)?;
+                    let values = Self::generate_fields(metadata, &values);
+                    let values = Self::expand_fields(&values);
+                    let values = Self::create_values(metadata.fields(), &values);
+                    let values = Record::new(&values);
+                    Self::dispatch(|dispatch| dispatch.record(local_id, &values));
+                }
+                let span = self.span_mut(id)?;
+                span.values.extend(values);
             }
 
             TracingEvent::NewEvent {
@@ -379,9 +428,9 @@ impl TracingEventReceiver {
                 let values = Self::generate_fields(metadata, &values);
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
-                let parent = parent.map(|id| self.map_span_id(id)).transpose()?.cloned();
+                let parent = parent.map(|id| self.map_span_id(id)).transpose()?.flatten();
                 let event = if let Some(parent) = parent {
-                    Event::new_child_of(parent, metadata, &values)
+                    Event::new_child_of(parent.clone(), metadata, &values)
                 } else {
                     Event::new(metadata, &values)
                 };
@@ -405,20 +454,11 @@ impl TracingEventReceiver {
     /// should *logically* be the same metadata as provided to [`Self::new()`]; i.e.,
     /// metadata for a particular executable, such as a Tardigrade module.
     pub fn persist_metadata(&self, persisted: &mut PersistedMetadata) {
-        persisted.is_injected = true;
         for (&id, &metadata) in &self.metadata {
             persisted
                 .inner
                 .entry(id)
                 .or_insert_with(|| CallSiteData::from(metadata));
-        }
-    }
-
-    /// Returns alive spans produced by the previously consumed events.
-    pub fn persist_spans(self) -> PersistedSpans {
-        PersistedSpans {
-            inner: self.spans,
-            is_injected: true,
         }
     }
 }

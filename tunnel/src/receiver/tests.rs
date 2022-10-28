@@ -30,7 +30,10 @@ fn unknown_metadata_error() {
         metadata_id: 0,
         values: TracedValues::new(),
     };
-    let mut receiver = TracingEventReceiver::default();
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut receiver =
+        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
     let err = receiver.try_receive(event).unwrap_err();
     assert_matches!(err, ReceiveError::UnknownMetadataId(0));
 }
@@ -58,7 +61,10 @@ fn unknown_span_errors() {
         },
     ];
 
-    let mut receiver = TracingEventReceiver::default();
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut receiver =
+        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
     receiver.receive(TracingEvent::NewCallSite {
         id: 0,
         data: CALL_SITE_DATA,
@@ -74,7 +80,10 @@ fn spans_with_allowed_value_lengths() {
     for values_len in 0..=32 {
         println!("values length: {values_len}");
 
-        let mut receiver = TracingEventReceiver::default();
+        let mut spans = PersistedSpans::default();
+        let mut local_spans = LocalSpans::default();
+        let mut receiver =
+            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
         let fields = (0..values_len)
             .map(|i| Cow::Owned(format!("field{i}")))
             .collect();
@@ -98,7 +107,10 @@ fn spans_with_allowed_value_lengths() {
 
 #[test]
 fn too_many_values_error() {
-    let mut receiver = TracingEventReceiver::default();
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut receiver =
+        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
     receiver.receive(TracingEvent::NewCallSite {
         id: 0,
         data: CALL_SITE_DATA,
@@ -122,3 +134,5 @@ fn too_many_values_error() {
         }
     );
 }
+
+// FIXME: test restoring spans

@@ -10,8 +10,8 @@ mod fib;
 
 use tracing_capture::{CaptureLayer, SharedStorage, Storage};
 use tracing_tunnel::{
-    CallSiteData, CallSiteKind, TracedValue, TracedValues, TracingEvent, TracingEventReceiver,
-    TracingLevel,
+    CallSiteData, CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue,
+    TracedValues, TracingEvent, TracingEventReceiver, TracingLevel,
 };
 
 const CALL_SITE_DATA: CallSiteData = CallSiteData {
@@ -50,7 +50,10 @@ fn replayed_spans_are_closed_if_entered_multiple_times() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut receiver = TracingEventReceiver::default();
+        let mut spans = PersistedSpans::default();
+        let mut local_spans = LocalSpans::default();
+        let mut receiver =
+            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
         for event in events {
             receiver.receive(event);
         }
@@ -117,7 +120,10 @@ fn capturing_spans_for_replayed_events() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut consumer = TracingEventReceiver::default();
+        let mut spans = PersistedSpans::default();
+        let mut local_spans = LocalSpans::default();
+        let mut consumer =
+            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
         for event in events {
             consumer.receive(event.clone());
         }

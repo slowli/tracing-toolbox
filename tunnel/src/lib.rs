@@ -138,11 +138,12 @@ mod receiver;
 #[cfg(feature = "sender")]
 #[cfg_attr(docsrs, doc(cfg(feature = "sender")))]
 mod sender;
-mod serde_helpers;
 mod types;
 
 #[cfg(feature = "receiver")]
-pub use crate::receiver::{PersistedMetadata, PersistedSpans, ReceiveError, TracingEventReceiver};
+pub use crate::receiver::{
+    LocalSpans, PersistedMetadata, PersistedSpans, ReceiveError, TracingEventReceiver,
+};
 #[cfg(feature = "sender")]
 pub use crate::sender::TracingEventSender;
 pub use crate::types::{

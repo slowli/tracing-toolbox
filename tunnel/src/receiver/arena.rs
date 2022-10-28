@@ -133,14 +133,15 @@ impl Arena {
         self.metadata.write().unwrap()
     }
 
-    pub(crate) fn alloc_metadata(&self, data: CallSiteData) -> &'static Metadata<'static> {
+    /// Returns the metadata and a flag whether it was allocated in this call.
+    pub(super) fn alloc_metadata(&self, data: CallSiteData) -> (&'static Metadata<'static>, bool) {
         let hash_value = Self::hash_metadata(&data);
         let scanned_bucket_len = {
             let lock = self.lock_metadata();
             if let Some(bucket) = lock.get(&hash_value) {
                 for &metadata in bucket {
                     if Self::eq_metadata(&data, metadata) {
-                        return metadata;
+                        return (metadata, false);
                     }
                 }
                 bucket.len()
@@ -153,14 +154,14 @@ impl Arena {
         let bucket = lock.entry(hash_value).or_default();
         for &metadata in &bucket[scanned_bucket_len..] {
             if Self::eq_metadata(&data, metadata) {
-                return metadata;
+                return (metadata, false);
             }
         }
 
         // Finally, we need to actually leak metadata.
         let metadata = self.leak_metadata(data);
         bucket.push(metadata);
-        metadata
+        (metadata, true)
     }
 
     // The returned hash doesn't necessarily match the hash of `Metadata`, but it is the same
