@@ -69,8 +69,8 @@ struct SpanData {
 /// Information about span / event [`Metadata`] that is [serializable] and thus
 /// can be persisted across multiple [`TracingEventReceiver`] lifetimes.
 ///
-/// `PersistedMetadata` logically corresponds to a program executable (i.e., a workflow module
-/// in Tardigrade), not to its particular execution (i.e., a workflow instance in Tardigrade).
+/// `PersistedMetadata` logically corresponds to a program executable (e.g., a WASM module),
+/// not to its particular execution (e.g., a WASM module instance).
 /// Multiple executions of the same executable can (and optimally should)
 /// share `PersistedMetadata`.
 ///
@@ -82,6 +82,16 @@ pub struct PersistedMetadata {
 }
 
 impl PersistedMetadata {
+    /// Returns the number of metadata entries.
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Checks whether this metadata collection is empty (i.e., no metadata was recorded yet).
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     /// Iterates over contained call site metadata together with the corresponding
     /// [`MetadataId`]s.
     pub fn iter(&self) -> impl Iterator<Item = (MetadataId, &CallSiteData)> + '_ {
@@ -101,6 +111,18 @@ impl PersistedMetadata {
 #[serde(transparent)]
 pub struct PersistedSpans {
     inner: HashMap<RawSpanId, SpanData>,
+}
+
+impl PersistedSpans {
+    /// Returns the number of alive spans.
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Checks whether this span collection is empty (i.e., no spans were recorded yet).
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 /// [`Subscriber`]-specific information about tracing spans for a particular execution
@@ -473,7 +495,7 @@ impl<'sp> TracingEventReceiver<'sp> {
 
     /// Persists [`Metadata`] produced by the previously consumed events. `persisted`
     /// should *logically* be the same metadata as provided to [`Self::new()`]; i.e.,
-    /// metadata for a particular executable, such as a Tardigrade module.
+    /// metadata for a particular executable, such as a WASM module.
     pub fn persist_metadata(&self, persisted: &mut PersistedMetadata) {
         for (&id, &metadata) in &self.metadata {
             persisted
