@@ -70,8 +70,8 @@ struct SpanData {
 /// can be persisted across multiple [`TracingEventReceiver`] lifetimes.
 ///
 /// `PersistedMetadata` logically corresponds to a program executable (i.e., a workflow module
-/// in Tardigrade), not to its particular invocation (i.e., a workflow instance in Tardigrade).
-/// Multiple invocations of the same executable can (and optimally should)
+/// in Tardigrade), not to its particular execution (i.e., a workflow instance in Tardigrade).
+/// Multiple executions of the same executable can (and optimally should)
 /// share `PersistedMetadata`.
 ///
 /// [serializable]: https://docs.rs/serde/1/serde

@@ -23,6 +23,32 @@ const fn create_call_site(fields: Vec<Cow<'static, str>>) -> CallSiteData {
 }
 
 #[test]
+fn duplicate_call_site_definitions_are_allowed() {
+    let events = [
+        TracingEvent::NewCallSite {
+            id: 0,
+            data: CALL_SITE_DATA,
+        },
+        TracingEvent::NewCallSite {
+            id: 0,
+            data: CALL_SITE_DATA,
+        },
+    ];
+
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut receiver =
+        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    for event in events {
+        receiver.receive(event);
+    }
+
+    let mut metadata = PersistedMetadata::default();
+    receiver.persist_metadata(&mut metadata);
+    assert_eq!(metadata.inner.len(), 1);
+}
+
+#[test]
 fn unknown_metadata_error() {
     let event = TracingEvent::NewSpan {
         id: 0,
