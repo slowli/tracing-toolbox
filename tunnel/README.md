@@ -64,12 +64,20 @@ println!("{events:?}");
 
 ```rust
 use std::sync::mpsc;
-use tracing_tunnel::{PersistedMetadata, TracingEvent, TracingEventReceiver};
+use tracing_tunnel::{
+    LocalSpans, PersistedMetadata, PersistedSpans, TracingEvent, TracingEventReceiver,
+};
 
 tracing_subscriber::fmt().pretty().init();
 
 fn replay_events(events: &[TracingEvent]) {
-    let mut receiver = TracingEventReceiver::default();
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut receiver = TracingEventReceiver::new(
+        PersistedMetadata::default(),
+        &mut spans,
+        &mut local_spans,
+    );
     for event in events {
         if let Err(err) = receiver.try_receive(event.clone()) {
             tracing::warn!(%err, "received invalid tracing event");
@@ -77,11 +85,12 @@ fn replay_events(events: &[TracingEvent]) {
     }
 
     // Persist the resulting receiver state. There are two pieces
-    // of the state: metadata and alive spans.
+    // of the state: metadata and alive spans. The spans are further split
+    // into the persisted and local parts.
     let mut metadata = PersistedMetadata::default();
     receiver.persist_metadata(&mut metadata);
-    let spans = receiver.persist_spans(); 
-    // Store `metadata` and `spans`, e.g., in a DB
+    // Store `metadata` and `spans`, e.g., in a DB, and `local_spans`
+    // in a local data struct such as `HashMap`.
 }
 ```
 

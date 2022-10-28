@@ -1,4 +1,4 @@
-//! `TracingEvent` consumer.
+//! `TracingEvent` receiver.
 
 use serde::{Deserialize, Serialize};
 use tracing_core::{
@@ -89,18 +89,28 @@ impl PersistedMetadata {
     }
 }
 
-/// Information about alive tracing spans that is (de)serializable and thus
+/// Information about alive tracing spans for a particular execution that is (de)serializable and
 /// can be persisted across multiple [`TracingEventReceiver`] lifetimes.
 ///
 /// Unlike [`PersistedMetadata`], `PersistedSpans` are specific to an executable invocation
-/// (i.e., a workflow instance in Tardigrade).
+/// (e.g., a WASM module instance). Compared to [`LocalSpans`], `PersistedSpans` have
+/// the lifetime of the execution and not the host [`Subscriber`].
+///
+/// [`Subscriber`]: tracing_core::Subscriber
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersistedSpans {
     inner: HashMap<RawSpanId, SpanData>,
 }
 
-/// FIXME
+/// [`Subscriber`]-specific information about tracing spans for a particular execution
+/// (e.g., a WASM module instance).
+///
+/// Unlike [`PersistedSpans`], this information is not serializable and lives along with
+/// the host [`Subscriber`]. It is intended to be placed in something like
+/// (an initially empty) `HashMap<K, LocalSpans>`, where `K` denotes the execution ID.
+///
+/// [`Subscriber`]: tracing_core::Subscriber
 #[derive(Debug, Default)]
 pub struct LocalSpans {
     inner: HashMap<RawSpanId, Id>,
@@ -187,7 +197,15 @@ impl<'sp> TracingEventReceiver<'sp> {
     /// Maximum supported number of values in a span or event.
     const MAX_VALUES: usize = 32;
 
-    /// Restores the consumer from the persisted `metadata` and tracing `spans`.
+    /// Restores the receiver from the persisted metadata and tracing spans.
+    ///
+    /// A receiver will work fine if `local_spans` information is lost (e.g., reset to the default
+    /// empty value). However, this is likely to result in span leakage
+    /// in the underlying [`Subscriber`]. On the other hand, mismatch between `metadata` / `spans`
+    /// and the execution producing [`TracingEvent`]s is **bad**; it will most likely result
+    /// in errors returned from [`Self::try_receive()`].
+    ///
+    /// [`Subscriber`]: tracing_core::Subscriber
     pub fn new(
         metadata: PersistedMetadata,
         spans: &'sp mut PersistedSpans,

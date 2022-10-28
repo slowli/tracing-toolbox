@@ -102,13 +102,22 @@
 //! ## Receiving events from `TracingEventReceiver`
 //!
 //! ```
-//! # use tracing_tunnel::{PersistedMetadata, TracingEvent, TracingEventReceiver};
+//! # use tracing_tunnel::{
+//! #     LocalSpans, PersistedMetadata, PersistedSpans, TracingEvent, TracingEventReceiver
+//! # };
 //! tracing_subscriber::fmt().pretty().init();
 //!
 //! let events: Vec<TracingEvent> = // ...
 //! #    vec![];
+//!
+//! let mut spans = PersistedSpans::default();
+//! let mut local_spans = LocalSpans::default();
 //! // Replay `events` using the default subscriber.
-//! let mut receiver = TracingEventReceiver::default();
+//! let mut receiver = TracingEventReceiver::new(
+//!     PersistedMetadata::default(),
+//!     &mut spans,
+//!     &mut local_spans,
+//! );
 //! for event in events {
 //!     if let Err(err) = receiver.try_receive(event) {
 //!         tracing::warn!(%err, "received invalid tracing event");
@@ -120,8 +129,8 @@
 //! receiver.persist_metadata(&mut metadata);
 //! // `metadata` can be shared among multiple executions of the same executable
 //! // (e.g., a WASM module).
-//! let spans = receiver.persist_spans();
-//! // `spans` are specific for an execution.
+//! // `spans` and `local_spans` are specific to the execution; `spans` should
+//! // be persisted, while `local_spans` should be stored in RAM.
 //! ```
 
 // Documentation settings.
