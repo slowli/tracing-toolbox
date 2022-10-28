@@ -10,8 +10,8 @@ mod fib;
 
 use tracing_capture::{CaptureLayer, SharedStorage, Storage};
 use tracing_tunnel::{
-    CallSiteData, CallSiteKind, TracedValue, TracedValues, TracingEvent, TracingEventReceiver,
-    TracingLevel,
+    CallSiteData, CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue,
+    TracedValues, TracingEvent, TracingEventReceiver, TracingLevel,
 };
 
 const CALL_SITE_DATA: CallSiteData = CallSiteData {
@@ -50,7 +50,10 @@ fn replayed_spans_are_closed_if_entered_multiple_times() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut receiver = TracingEventReceiver::default();
+        let mut spans = PersistedSpans::default();
+        let mut local_spans = LocalSpans::default();
+        let mut receiver =
+            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
         for event in events {
             receiver.receive(event);
         }
@@ -61,6 +64,74 @@ fn replayed_spans_are_closed_if_entered_multiple_times() {
     assert_eq!(span.stats().entered, 2);
     assert_eq!(span.stats().exited, 2);
     assert!(span.stats().is_closed);
+}
+
+// This is also a `TracingEventReceiver` test.
+#[test]
+fn recorded_span_values_are_restored() {
+    let events = [
+        TracingEvent::NewCallSite {
+            id: 0,
+            data: CallSiteData {
+                fields: vec!["i".into()],
+                ..CALL_SITE_DATA
+            },
+        },
+        TracingEvent::NewSpan {
+            id: 0,
+            parent_id: None,
+            metadata_id: 0,
+            values: TracedValues::from_iter([("i".to_owned(), TracedValue::from(42_i64))]),
+        },
+        TracingEvent::SpanEntered { id: 0 },
+        TracingEvent::SpanExited { id: 0 },
+    ];
+
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut receiver =
+        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    for event in events {
+        receiver.receive(event);
+    }
+    let mut metadata = PersistedMetadata::default();
+    receiver.persist_metadata(&mut metadata);
+
+    // Emulate host restart: persisted metadata / spans are restored, but `local_spans` are not.
+    let more_events = [
+        TracingEvent::SpanEntered { id: 0 },
+        TracingEvent::NewCallSite {
+            id: 1,
+            data: CallSiteData {
+                fields: vec!["message".into()],
+                ..CALL_SITE_DATA
+            },
+        },
+        TracingEvent::NewEvent {
+            metadata_id: 1,
+            parent: None,
+            values: TracedValues::from_iter([("message".to_owned(), TracedValue::from("test"))]),
+        },
+        TracingEvent::SpanExited { id: 0 },
+        TracingEvent::SpanDropped { id: 0 },
+    ];
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    let mut local_spans = LocalSpans::default();
+    tracing::subscriber::with_default(subscriber, || {
+        let mut receiver = TracingEventReceiver::new(metadata, &mut spans, &mut local_spans);
+        for event in more_events {
+            receiver.receive(event);
+        }
+    });
+
+    let storage = storage.lock();
+    let span = &storage.spans()[0];
+    assert_eq!(span["i"], 42_i64);
+    assert_eq!(span.stats().entered, 1);
+    assert!(span.stats().is_closed);
+    let event = &span.events()[0];
+    assert_eq!(event["message"].as_str(), Some("test"));
 }
 
 #[test]
@@ -117,7 +188,10 @@ fn capturing_spans_for_replayed_events() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut consumer = TracingEventReceiver::default();
+        let mut spans = PersistedSpans::default();
+        let mut local_spans = LocalSpans::default();
+        let mut consumer =
+            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
         for event in events {
             consumer.receive(event.clone());
         }

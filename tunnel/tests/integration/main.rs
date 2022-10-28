@@ -8,13 +8,13 @@ use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    thread,
+    iter, thread,
 };
 
 mod fib;
 
 use tracing_tunnel::{
-    CallSiteKind, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
+    CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
     TracingEventReceiver, TracingLevel,
 };
 
@@ -34,17 +34,32 @@ static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
 #[cfg(unix)] // The snapshot contains OS-specific path delimiters
 #[test]
 fn event_snapshot() {
+    use tracing_tunnel::MetadataId;
+
     let mut events = EVENTS.short.clone();
+    let mut metadata_id_mapping = HashMap::new();
     for event in &mut events {
-        if let TracingEvent::NewCallSite { data, .. } = event {
-            // Make event data not depend on specific lines, which could easily
-            // change due to refactoring etc.
-            data.line = Some(42);
-            if matches!(data.kind, CallSiteKind::Event) {
-                data.name = Cow::Borrowed("event");
+        match event {
+            TracingEvent::NewCallSite { id, data } => {
+                // Replace metadata ID to be predictable.
+                let new_metadata_id = metadata_id_mapping.len() as MetadataId;
+                metadata_id_mapping.insert(*id, new_metadata_id);
+                *id = new_metadata_id;
+                // Make event data not depend on specific lines, which could easily
+                // change due to refactoring etc.
+                data.line = Some(42);
+                if matches!(data.kind, CallSiteKind::Event) {
+                    data.name = Cow::Borrowed("event");
+                }
             }
+            TracingEvent::NewSpan { metadata_id, .. }
+            | TracingEvent::NewEvent { metadata_id, .. } => {
+                *metadata_id = metadata_id_mapping[metadata_id];
+            }
+            _ => { /* No changes */ }
         }
     }
+
     insta::assert_yaml_snapshot!("events-fib-5", events);
 }
 
@@ -190,7 +205,10 @@ fn create_fmt_subscriber() -> impl Subscriber + for<'a> LookupSpan<'a> {
 fn reproducing_events_on_fmt_subscriber() {
     let events = &EVENTS.long;
 
-    let mut consumer = TracingEventReceiver::default();
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut consumer =
+        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             consumer.receive(event.clone());
@@ -203,13 +221,15 @@ fn persisting_metadata() {
     let events = &EVENTS.short;
 
     let mut persisted = PersistedMetadata::default();
-    let mut consumer = TracingEventReceiver::new(&mut persisted, &mut PersistedSpans::default());
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    let mut receiver = TracingEventReceiver::new(persisted.clone(), &mut spans, &mut local_spans);
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
-            consumer.receive(event.clone());
+            receiver.receive(event.clone());
         }
     });
-    consumer.persist_metadata(&mut persisted);
+    receiver.persist_metadata(&mut persisted);
 
     let names: HashSet<_> = persisted
         .iter()
@@ -218,40 +238,65 @@ fn persisting_metadata() {
     assert!(names.contains("fib"), "{names:?}");
     assert!(names.contains("compute"), "{names:?}");
 
-    // Check that `consumer` can function after restoring `persisted` meta.
-    let mut consumer = TracingEventReceiver::new(&mut persisted, &mut PersistedSpans::default());
+    // Check that `receiver` can function after restoring `persisted` meta.
+    let mut receiver = TracingEventReceiver::new(persisted, &mut spans, &mut local_spans);
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             if !matches!(event, TracingEvent::NewCallSite { .. }) {
-                consumer.receive(event.clone());
+                receiver.receive(event.clone());
             }
+        }
+    });
+}
+
+fn test_persisting_spans(reset_local_spans: bool) {
+    let events = &EVENTS.short;
+    let split_positions = events.iter().enumerate().filter_map(|(i, event)| {
+        if matches!(
+            event,
+            TracingEvent::NewSpan { .. } | TracingEvent::SpanExited { .. }
+        ) {
+            Some(i + 1)
+        } else {
+            None
+        }
+    });
+    let split_positions: Vec<_> = iter::once(0)
+        .chain(split_positions)
+        .chain([events.len()])
+        .collect();
+    let event_chunks = split_positions.windows(2).map(|window| match window {
+        [prev, next] => &events[*prev..*next],
+        _ => unreachable!(),
+    });
+
+    let mut metadata = PersistedMetadata::default();
+    let mut spans = PersistedSpans::default();
+    let mut local_spans = LocalSpans::default();
+    tracing::subscriber::with_default(create_fmt_subscriber(), || {
+        for events in event_chunks {
+            if reset_local_spans {
+                local_spans = LocalSpans::default();
+            }
+
+            let mut receiver =
+                TracingEventReceiver::new(metadata.clone(), &mut spans, &mut local_spans);
+            for event in events {
+                receiver.receive(event.clone());
+            }
+            receiver.persist_metadata(&mut metadata);
         }
     });
 }
 
 #[test]
 fn persisting_spans() {
-    let events = &EVENTS.short;
+    test_persisting_spans(false);
+}
 
-    let mut metadata = PersistedMetadata::default();
-    let mut spans = PersistedSpans::default();
-    tracing::subscriber::with_default(create_fmt_subscriber(), || {
-        let mut consumer = TracingEventReceiver::new(&mut metadata, &mut spans);
-        for event in events {
-            consumer.receive(event.clone());
-
-            if matches!(
-                event,
-                TracingEvent::NewSpan { .. } | TracingEvent::SpanExited { .. }
-            ) {
-                // Emulate consumer reset. When the matched events are emitted,
-                // spans should be non-empty.
-                consumer.persist_metadata(&mut metadata);
-                spans = consumer.persist_spans();
-                consumer = TracingEventReceiver::new(&mut metadata, &mut spans);
-            }
-        }
-    });
+#[test]
+fn persisting_spans_with_reset_local_spans() {
+    test_persisting_spans(true);
 }
 
 #[test]
@@ -294,7 +339,8 @@ fn assert_valid_refs(events: &[TracingEvent]) {
     for event in events {
         match event {
             TracingEvent::NewCallSite { id, .. } => {
-                assert!(call_site_ids.insert(*id));
+                call_site_ids.insert(*id);
+                // IDs may duplicate provided they reference the same call site.
             }
             TracingEvent::NewSpan {
                 id, metadata_id, ..
