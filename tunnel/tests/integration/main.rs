@@ -234,8 +234,7 @@ fn persisting_metadata() {
     });
 }
 
-#[test]
-fn persisting_spans() {
+fn test_persisting_spans(reset_local_spans: bool) {
     let events = &EVENTS.short;
     let split_positions = events.iter().enumerate().filter_map(|(i, event)| {
         if matches!(
@@ -261,14 +260,29 @@ fn persisting_spans() {
     let mut local_spans = LocalSpans::default();
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for events in event_chunks {
+            if reset_local_spans {
+                local_spans = LocalSpans::default();
+            }
+
             let mut receiver =
                 TracingEventReceiver::new(metadata.clone(), &mut spans, &mut local_spans);
             for event in events {
+                dbg!(event);
                 receiver.receive(event.clone());
             }
             receiver.persist_metadata(&mut metadata);
         }
     });
+}
+
+#[test]
+fn persisting_spans() {
+    test_persisting_spans(false);
+}
+
+#[test]
+fn persisting_spans_with_reset_local_spans() {
+    test_persisting_spans(true);
 }
 
 #[test]

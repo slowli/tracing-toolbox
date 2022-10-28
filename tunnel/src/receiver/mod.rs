@@ -263,7 +263,11 @@ impl<'sp> TracingEventReceiver<'sp> {
         let fields = metadata.fields();
         values
             .iter()
-            .map(|(field_name, value)| (fields.field(field_name).unwrap(), value.as_value()))
+            .filter_map(|(field_name, value)| {
+                fields
+                    .field(field_name)
+                    .map(|field| (field, value.as_value()))
+            })
             .collect()
     }
 
@@ -367,6 +371,7 @@ impl<'sp> TracingEventReceiver<'sp> {
                     });
                 }
             }
+
             TracingEvent::SpanEntered { id } => {
                 let local_id = if let Some(id) = self.map_span_id(id)? {
                     id.clone()
@@ -379,13 +384,11 @@ impl<'sp> TracingEventReceiver<'sp> {
                 Self::dispatch(|dispatch| dispatch.enter(&local_id));
             }
             TracingEvent::SpanExited { id } => {
-                let local_id = self
-                    .map_span_id(id)?
-                    .ok_or(ReceiveError::UnknownSpanId(id))?;
-                // ^ In valid event sequences, the local ID must have been set previously
-                // by a `SpanEntered` event.
-                Self::dispatch(|dispatch| dispatch.exit(local_id));
+                if let Some(local_id) = self.map_span_id(id)? {
+                    Self::dispatch(|dispatch| dispatch.exit(local_id));
+                }
             }
+
             TracingEvent::SpanCloned { id } => {
                 let span = self.span_mut(id)?;
                 span.ref_count += 1;
