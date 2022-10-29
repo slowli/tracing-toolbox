@@ -219,8 +219,7 @@ macro_rules! impl_into_field_predicate {
     };
 }
 
-// FIXME: add `&str`
-impl_into_field_predicate!(bool, i64, i128, u64, u128, f64);
+impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 
 pub fn field<P: IntoFieldPredicate>(
     name: &'static str,
