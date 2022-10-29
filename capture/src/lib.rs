@@ -73,6 +73,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+pub mod predicates;
+
 use tracing_tunnel::{TracedValue, TracedValues, ValueVisitor};
 
 /// Captured tracing event containing a reference to its [`Metadata`] and values that the event

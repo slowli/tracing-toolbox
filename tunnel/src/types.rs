@@ -263,6 +263,12 @@ impl PartialEq<bool> for TracedValue {
     }
 }
 
+impl PartialEq<TracedValue> for bool {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
+    }
+}
+
 impl From<i128> for TracedValue {
     fn from(value: i128) -> Self {
         Self::Int(value)
@@ -275,6 +281,12 @@ impl PartialEq<i128> for TracedValue {
             Self::Int(value) => value == other,
             _ => false,
         }
+    }
+}
+
+impl PartialEq<TracedValue> for i128 {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
     }
 }
 
@@ -293,6 +305,12 @@ impl PartialEq<i64> for TracedValue {
     }
 }
 
+impl PartialEq<TracedValue> for i64 {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
+    }
+}
+
 impl From<u128> for TracedValue {
     fn from(value: u128) -> Self {
         Self::UInt(value)
@@ -305,6 +323,12 @@ impl PartialEq<u128> for TracedValue {
             Self::UInt(value) => value == other,
             _ => false,
         }
+    }
+}
+
+impl PartialEq<TracedValue> for u128 {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
     }
 }
 
@@ -323,6 +347,12 @@ impl PartialEq<u64> for TracedValue {
     }
 }
 
+impl PartialEq<TracedValue> for u64 {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
+    }
+}
+
 impl From<f64> for TracedValue {
     fn from(value: f64) -> Self {
         Self::Float(value)
@@ -335,6 +365,12 @@ impl PartialEq<f64> for TracedValue {
             Self::Float(value) => value == other,
             _ => false,
         }
+    }
+}
+
+impl PartialEq<TracedValue> for f64 {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
     }
 }
 
@@ -352,6 +388,14 @@ impl PartialEq<str> for TracedValue {
         }
     }
 }
+
+impl PartialEq<TracedValue> for str {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
+    }
+}
+
+// FIXME: use macro to shorten code
 
 impl TracedValue {
     fn debug(object: &dyn fmt::Debug) -> Self {
