@@ -16,7 +16,7 @@ pub struct And<T, U> {
 }
 
 impl<T: PredicateReflection, U: PredicateReflection> And<T, U> {
-    pub(crate) const fn new(first: T, second: U) -> Self {
+    pub(crate) fn new(first: T, second: U) -> Self {
         Self { first, second }
     }
 }
@@ -69,7 +69,7 @@ pub struct Or<T, U> {
 }
 
 impl<T: PredicateReflection, U: PredicateReflection> Or<T, U> {
-    pub(crate) const fn new(first: T, second: U) -> Self {
+    pub(crate) fn new(first: T, second: U) -> Self {
         Self { first, second }
     }
 }
