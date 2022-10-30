@@ -1,6 +1,7 @@
 //! Tests for `CapturedSpan` / `CapturedEvent` predicates.
 
 use predicates::{
+    constant::always,
     ord::eq,
     prelude::*,
     reflection::{Case, Product},
@@ -11,7 +12,7 @@ use tracing_core::{
 };
 
 use super::*;
-use crate::SpanStats;
+use crate::{CapturedEvent, CapturedSpan, SpanStats};
 use tracing_tunnel::{TracedValue, TracedValues};
 
 static SITE: DefaultCallsite = DefaultCallsite::new(METADATA);
@@ -200,4 +201,30 @@ fn message_predicates() {
     let predicate =
         message(starts_with("completed")) & level(Level::DEBUG) & target("tracing_capture");
     assert!(predicate.eval(&event));
+}
+
+#[test]
+fn using_extensions() {
+    let events = (0_i64..5).map(|val| CapturedEvent {
+        metadata: EVENT_METADATA,
+        values: TracedValues::from_iter([
+            ("val", val.into()),
+            (
+                "message",
+                TracedValue::debug(&format_args!("completed computations")),
+            ),
+        ]),
+    });
+    let events: Vec<_> = events.collect();
+
+    let predicate =
+        level(LevelFilter::DEBUG) & message(starts_with("completed")) & field("val", 1_i64);
+    let scanner = events.as_slice().scanner();
+    let event = scanner.single(&predicate);
+    assert_eq!(event["val"], 1_i64);
+    let event = scanner.first(&field("val", [always()]));
+    assert_eq!(event["val"], 0_i64);
+
+    let event = events.scanner().last(&predicate);
+    assert_eq!(event["val"], 1_i64);
 }

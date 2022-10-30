@@ -60,7 +60,7 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 /// ```
 /// # use predicates::constant::always;
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{field, CapturedExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{field, ScannerExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -70,9 +70,10 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 /// });
 ///
 /// let storage = storage.lock();
-/// // All of these access the single captured event.
-/// let _ = storage.spans().find_single(field("arg", [always()]));
-/// let _ = storage.spans().find_single(field("arg", 5_i64));
+/// // All of these access the single captured span.
+/// let spans = storage.spans().scanner();
+/// let _ = spans.single(&field("arg", [always()]));
+/// let _ = spans.single(&field("arg", 5_i64));
 /// ```
 pub fn field<P: IntoFieldPredicate>(
     name: &'static str,
@@ -173,7 +174,7 @@ impl<V: fmt::Debug + PartialEq<TracedValue>> Predicate<TracedValue> for EquivPre
 /// ```
 /// # use predicates::{ord::eq, str::contains};
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{message, CapturedExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{message, ScannerExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -184,9 +185,10 @@ impl<V: fmt::Debug + PartialEq<TracedValue>> Predicate<TracedValue> for EquivPre
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured event.
-/// let events = storage.spans()[0].events();
-/// let _ = events.find_single(message(eq("computations completed")));
-/// let _ = events.find_single(message(contains("completed")));
+/// let events = storage.all_events().scanner();
+/// let _ = events.single(&message(eq("computations completed")));
+/// let events = storage.all_events().scanner();
+/// let _ = events.single(&message(contains("completed")));
 /// ```
 pub fn message<P: Predicate<str>>(matches: P) -> MessagePredicate<P> {
     MessagePredicate { matches }

@@ -75,7 +75,14 @@ use std::{
 
 pub mod predicates;
 
+mod sealed {
+    pub trait Sealed {}
+}
+
 use tracing_tunnel::{TracedValue, TracedValues, ValueVisitor};
+
+/// Marker trait for captured objects (spans and events).
+pub trait Captured: 'static + fmt::Debug + sealed::Sealed {}
 
 /// Captured tracing event containing a reference to its [`Metadata`] and values that the event
 /// was created with.
@@ -112,6 +119,9 @@ impl ops::Index<&str> for CapturedEvent {
             .unwrap_or_else(|| panic!("field `{index}` is not contained in event"))
     }
 }
+
+impl sealed::Sealed for CapturedEvent {}
+impl Captured for CapturedEvent {}
 
 /// Statistics about a [`CapturedSpan`].
 #[derive(Debug, Clone, Copy, Default)]
@@ -172,6 +182,9 @@ impl ops::Index<&str> for CapturedSpan {
             .unwrap_or_else(|| panic!("field `{index}` is not contained in span"))
     }
 }
+
+impl sealed::Sealed for CapturedSpan {}
+impl Captured for CapturedSpan {}
 
 /// Storage of captured tracing information.
 ///

@@ -50,7 +50,7 @@ impl IntoTargetPredicate for &str {
 /// ```
 /// # use predicates::str::starts_with;
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{target, CapturedExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{target, ScannerExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -61,8 +61,9 @@ impl IntoTargetPredicate for &str {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let _ = storage.spans().find_single(target("capture"));
-/// let _ = storage.spans().find_single(target([starts_with("cap")]));
+/// let spans = storage.spans().scanner();
+/// let _ = spans.single(&target("capture"));
+/// let _ = spans.single(&target([starts_with("cap")]));
 /// ```
 pub fn target<P: IntoTargetPredicate>(matches: P) -> TargetPredicate<P::Predicate> {
     TargetPredicate {
