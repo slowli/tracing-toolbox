@@ -7,6 +7,8 @@ use predicates::{
 
 use std::fmt;
 
+/// Boolean "and" combinator for predicates. Produced by the bitwise and (`&`) operator
+/// on the base predicates from this module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct And<T, U> {
     first: T,
@@ -14,7 +16,7 @@ pub struct And<T, U> {
 }
 
 impl<T: PredicateReflection, U: PredicateReflection> And<T, U> {
-    pub const fn new(first: T, second: U) -> Self {
+    pub(crate) const fn new(first: T, second: U) -> Self {
         Self { first, second }
     }
 }
@@ -58,6 +60,8 @@ where
     }
 }
 
+/// Boolean "or" combinator for predicates. Produced by the bitwise or (`|`) operator
+/// on the base predicates from this module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Or<T, U> {
     first: T,
@@ -65,7 +69,7 @@ pub struct Or<T, U> {
 }
 
 impl<T: PredicateReflection, U: PredicateReflection> Or<T, U> {
-    pub const fn new(first: T, second: U) -> Self {
+    pub(crate) const fn new(first: T, second: U) -> Self {
         Self { first, second }
     }
 }
