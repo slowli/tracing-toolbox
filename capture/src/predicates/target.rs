@@ -1,7 +1,7 @@
 //! `target()` predicate factory.
 
 use predicates::{
-    reflection::{Case, PredicateReflection},
+    reflection::{Case, PredicateReflection, Product},
     Predicate,
 };
 
@@ -26,11 +26,43 @@ impl<P: Predicate<str>> IntoTargetPredicate for [P; 1] {
     }
 }
 
-impl IntoTargetPredicate for &str {
-    type Predicate = predicates::str::RegexPredicate;
+impl<'a> IntoTargetPredicate for &'a str {
+    type Predicate = TargetStrPredicate<'a>;
 
     fn into_predicate(self) -> Self::Predicate {
-        predicates::str::is_match(format!("^{self}($|::)")).unwrap()
+        TargetStrPredicate { prefix: self }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TargetStrPredicate<'a> {
+    prefix: &'a str,
+}
+
+impl fmt::Display for TargetStrPredicate<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "target ^= {}", self.prefix)
+    }
+}
+
+impl PredicateReflection for TargetStrPredicate<'_> {}
+
+impl Predicate<str> for TargetStrPredicate<'_> {
+    fn eval(&self, variable: &str) -> bool {
+        variable
+            .strip_prefix(self.prefix)
+            .map_or(false, |stripped| {
+                stripped.is_empty() || stripped.starts_with("::")
+            })
+    }
+
+    fn find_case(&self, expected: bool, variable: &str) -> Option<Case<'_>> {
+        if self.eval(variable) == expected {
+            let product = Product::new("target", variable.to_owned());
+            Some(Case::new(Some(self), expected).add_product(product))
+        } else {
+            None
+        }
     }
 }
 

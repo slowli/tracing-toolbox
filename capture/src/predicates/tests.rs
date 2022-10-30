@@ -123,7 +123,7 @@ fn compound_predicates() {
     let case = predicate.find_case(false, &span).unwrap();
     let products = collect_products(&case);
     assert_eq!(products.len(), 1);
-    assert_eq!(products[0].name(), "val");
+    assert_eq!(products[0].name(), "var");
     assert_eq!(products[0].value().to_string(), "UInt(23)");
 
     span.values = TracedValues::from_iter([("val", 42_u64.into())]);
