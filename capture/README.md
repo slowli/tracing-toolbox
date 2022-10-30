@@ -13,6 +13,9 @@ can then be used for testing assertions (e.g., "Did a span
 with a specific name / target / … occur? What were its fields? Was the span closed?
 How many times the span was entered?" and so on).
 
+The crate supports both straightforward assertions on the captured data,
+and more fluent assertions based on [`predicates`].
+
 ## Usage
 
 Add this to your `Crate.toml`:
@@ -53,6 +56,30 @@ assert_eq!(span.stats().entered, 1);
 assert!(span.stats().is_closed);
 ```
 
+### Predicate-based assertions
+
+```rust
+use predicates::str::contains;
+use tracing::Level;
+use tracing_subscriber::{layer::SubscriberExt, Registry};
+use tracing_capture::{predicates::*, CaptureLayer, SharedStorage};
+
+let storage = SharedStorage::default();
+let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+tracing::subscriber::with_default(subscriber, || {
+    tracing::info_span!("test_spans").in_scope(|| {
+        tracing::warn!(result = 42_i64, "computed");
+    });
+});
+
+let storage = storage.lock();
+let predicate = level(Level::WARN)
+    & message(contains("compute"))
+    & field("result", 42_i64);
+// Checks that there is a single event satisfying `predicate`.
+storage.all_events().scanner().single(&predicate);
+```
+
 ## Alternatives / similar tools
 
 [`tracing-test`] is a lower-level alternative. [`tracing-fluent-assertions`] is more
@@ -70,5 +97,6 @@ shall be dual licensed as above, without any additional terms or conditions.
 
 [tracing]: https://docs.rs/tracing/0.1/tracing
 [`Layer`]: https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/trait.Layer.html
+[`predicates`]: https://docs.rs/predicates/2/predicates
 [`tracing-test`]: https://crates.io/crates/tracing-test
 [`tracing-fluent-assertions`]: https://crates.io/crates/tracing-fluent-assertions
