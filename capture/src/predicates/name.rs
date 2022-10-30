@@ -32,15 +32,14 @@ use crate::CapturedSpan;
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let span = storage.spans().find_single(name(eq("compute")));
-/// let span = storage.spans().find_single(name(starts_with("co")));
+/// let _ = storage.spans().find_single(name(eq("compute")));
+/// let _ = storage.spans().find_single(name(starts_with("co")));
 /// ```
 pub fn name<P: Predicate<str>>(matches: P) -> NamePredicate<P> {
     NamePredicate { matches }
 }
 
-/// Predicate for the name of a [`CapturedSpan`] or [`CapturedEvent`] returned by
-/// the [`name()`] function.
+/// Predicate for the name of a [`CapturedSpan`] returned by the [`name()`] function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NamePredicate<P> {
     matches: P,

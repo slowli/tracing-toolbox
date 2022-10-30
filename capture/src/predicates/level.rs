@@ -72,9 +72,9 @@ impl IntoLevelPredicate for LevelFilter {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let span = storage.spans().find_single(level(Level::INFO));
-/// let span = storage.spans().find_single(level(LevelFilter::DEBUG));
-/// let span = storage.spans().find_single(level([gt(Level::WARN)]));
+/// let _ = storage.spans().find_single(level(Level::INFO));
+/// let _ = storage.spans().find_single(level(LevelFilter::DEBUG));
+/// let _ = storage.spans().find_single(level([gt(Level::WARN)]));
 /// ```
 pub fn level<P: IntoLevelPredicate>(matches: P) -> LevelPredicate<P::Predicate> {
     LevelPredicate {

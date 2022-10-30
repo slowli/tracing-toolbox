@@ -61,8 +61,8 @@ impl IntoTargetPredicate for &str {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let span = storage.spans().find_single(target("capture"));
-/// let span = storage.spans().find_single(target([starts_with("cap")]));
+/// let _ = storage.spans().find_single(target("capture"));
+/// let _ = storage.spans().find_single(target([starts_with("cap")]));
 /// ```
 pub fn target<P: IntoTargetPredicate>(matches: P) -> TargetPredicate<P::Predicate> {
     TargetPredicate {

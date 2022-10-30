@@ -227,6 +227,13 @@ impl fmt::Debug for DebugObject {
     }
 }
 
+/// Returns the [`Debug`](fmt::Debug) representation of the object.
+impl AsRef<str> for DebugObject {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Value recorded in a tracing span or event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

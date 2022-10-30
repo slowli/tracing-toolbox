@@ -8,6 +8,7 @@
 //! - [`name()`] checks the span name
 //! - [`target()`] checks the span / event target
 //! - [`field()`] checks a specific span / event field
+//! - [`message()`] checks the event message
 //!
 //! These predicates can be combined with bitwise operators, `&` and `|`.
 //! The [`CapturedExt`] trait may be used to simplify assertions with predicates. The remaining
@@ -53,7 +54,7 @@ mod tests;
 
 pub use self::{
     combinators::{And, Or},
-    field::{field, FieldPredicate, IntoFieldPredicate},
+    field::{field, message, FieldPredicate, IntoFieldPredicate, MessagePredicate},
     level::{level, IntoLevelPredicate, LevelPredicate},
     name::{name, NamePredicate},
     target::{target, IntoTargetPredicate, TargetPredicate},

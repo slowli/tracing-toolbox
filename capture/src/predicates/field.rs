@@ -1,4 +1,4 @@
-//! `field()` predicate factory.
+//! `field()` and `message()` predicate factories.
 
 use predicates::{
     reflection::{Case, PredicateReflection, Product},
@@ -34,7 +34,7 @@ macro_rules! impl_into_field_predicate {
             type Predicate = EquivPredicate<Self>;
 
             fn into_predicate(self) -> Self::Predicate {
-                equiv(self)
+                EquivPredicate { value: self }
             }
         }
         )+
@@ -71,8 +71,8 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured event.
-/// let event = storage.spans().find_single(field("arg", [always()]));
-/// let event = storage.spans().find_single(field("arg", 5_i64));
+/// let _ = storage.spans().find_single(field("arg", [always()]));
+/// let _ = storage.spans().find_single(field("arg", 5_i64));
 /// ```
 pub fn field<P: IntoFieldPredicate>(
     name: &'static str,
@@ -133,10 +133,6 @@ macro_rules! impl_predicate_for_field {
 impl_predicate_for_field!(CapturedSpan);
 impl_predicate_for_field!(CapturedEvent);
 
-fn equiv<V: PartialEq<TracedValue>>(value: V) -> EquivPredicate<V> {
-    EquivPredicate { value }
-}
-
 #[doc(hidden)] // implementation detail (yet?)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EquivPredicate<V> {
@@ -145,7 +141,7 @@ pub struct EquivPredicate<V> {
 
 impl<V: fmt::Debug> fmt::Display for EquivPredicate<V> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "var ~= {:?}", self.value)
+        write!(formatter, "var == {:?}", self.value)
     }
 }
 
@@ -163,5 +159,83 @@ impl<V: fmt::Debug + PartialEq<TracedValue>> Predicate<TracedValue> for EquivPre
         } else {
             None
         }
+    }
+}
+
+/// Creates a predicate for the message of a [`CapturedEvent`].
+///
+/// # Arguments
+///
+/// The argument of this function is a `str` predicate for the event message.
+///
+/// # Examples
+///
+/// ```
+/// # use predicates::{ord::eq, str::contains};
+/// # use tracing_subscriber::{layer::SubscriberExt, Registry};
+/// # use tracing_capture::{predicates::{message, CapturedExt}, CaptureLayer, SharedStorage};
+/// let storage = SharedStorage::default();
+/// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+/// tracing::subscriber::with_default(subscriber, || {
+///     tracing::info_span!("compute").in_scope(|| {
+///         tracing::info!(result = 42, "computations completed");
+///     });
+/// });
+///
+/// let storage = storage.lock();
+/// // All of these access the single captured event.
+/// let events = storage.spans()[0].events();
+/// let _ = events.find_single(message(eq("computations completed")));
+/// let _ = events.find_single(message(contains("completed")));
+/// ```
+pub fn message<P: Predicate<str>>(matches: P) -> MessagePredicate<P> {
+    MessagePredicate { matches }
+}
+
+/// Predicate for the message of a [`CapturedEvent`] returned by the [`message()`] function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MessagePredicate<P> {
+    matches: P,
+}
+
+impl_bool_ops!(MessagePredicate<P>);
+
+impl<P: Predicate<str>> fmt::Display for MessagePredicate<P> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "message({})", self.matches)
+    }
+}
+
+impl<P: Predicate<str>> PredicateReflection for MessagePredicate<P> {}
+
+impl<P: Predicate<str>> Predicate<CapturedEvent> for MessagePredicate<P> {
+    fn eval(&self, variable: &CapturedEvent) -> bool {
+        let message = variable.value("message").and_then(str_presentation);
+        message.map_or(false, |value| self.matches.eval(value))
+    }
+
+    fn find_case(&self, expected: bool, variable: &CapturedEvent) -> Option<Case<'_>> {
+        let message = variable.value("message").and_then(str_presentation);
+        let message = if let Some(message) = message {
+            message
+        } else {
+            return if expected {
+                None // was expecting a variable, but there is none
+            } else {
+                let product = Product::new("message", "None");
+                Some(Case::new(Some(self), expected).add_product(product))
+            };
+        };
+
+        let child = self.matches.find_case(expected, message)?;
+        Some(Case::new(Some(self), expected).add_child(child))
+    }
+}
+
+fn str_presentation(value: &TracedValue) -> Option<&str> {
+    match value {
+        TracedValue::String(str) => Some(str),
+        TracedValue::Object(object) => Some(object.as_ref()),
+        _ => None,
     }
 }
