@@ -317,6 +317,84 @@ impl_bool_ops!(NamePredicate<P>);
 impl_bool_ops!(LevelPredicate<P>);
 impl_bool_ops!(FieldPredicate<P>);
 
+pub trait CapturedExt {
+    type Item;
+
+    fn find_first(&self, predicate: impl Predicate<Self::Item>) -> &Self::Item;
+    fn find_last(&self, predicate: impl Predicate<Self::Item>) -> &Self::Item;
+    fn find_single(&self, predicate: impl Predicate<Self::Item>) -> &Self::Item;
+}
+
+macro_rules! impl_captured_ext {
+    ($target:ty) => {
+        impl CapturedExt for [$target] {
+            type Item = $target;
+
+            fn find_first(&self, predicate: impl Predicate<Self::Item>) -> &Self::Item {
+                self.iter()
+                    .find(|item| predicate.eval(item))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "no matches for predicate {predicate} from {snippet:?}",
+                            snippet = Snippet(self)
+                        )
+                    })
+            }
+
+            fn find_last(&self, predicate: impl Predicate<Self::Item>) -> &Self::Item {
+                self.iter()
+                    .rev()
+                    .find(|item| predicate.eval(item))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "no spans matched predicate {predicate} from {snippet:#?}",
+                            snippet = Snippet(self)
+                        )
+                    })
+            }
+
+            fn find_single(&self, predicate: impl Predicate<Self::Item>) -> &Self::Item {
+                let mut it = self.iter();
+                let matched = it.find(|item| predicate.eval(item)).unwrap_or_else(|| {
+                    panic!(
+                        "no spans matched predicate {predicate} from {snippet:?}",
+                        snippet = Snippet(self)
+                    )
+                });
+                if let Some(another_match) = it.find(|item| predicate.eval(item)) {
+                    panic!(
+                        "multiple matches for predicate {predicate}: {matches:?}",
+                        matches = [matched, another_match]
+                    );
+                }
+                matched
+            }
+        }
+    };
+}
+
+impl_captured_ext!(CapturedSpan);
+impl_captured_ext!(CapturedEvent);
+
+struct Snippet<'a, T>(&'a [T]);
+
+impl<T: fmt::Debug> fmt::Debug for Snippet<'_, T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const DISPLAYED_ITEMS: usize = 3;
+
+        if self.0.len() <= DISPLAYED_ITEMS {
+            write!(formatter, "{:#?}", &self.0)
+        } else {
+            write!(
+                formatter,
+                "{:#?} and {} more items",
+                &self.0,
+                self.0.len() - DISPLAYED_ITEMS
+            )
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use predicates::{
