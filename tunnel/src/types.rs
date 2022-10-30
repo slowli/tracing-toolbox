@@ -227,6 +227,13 @@ impl fmt::Debug for DebugObject {
     }
 }
 
+/// Returns the [`Debug`](fmt::Debug) representation of the object.
+impl AsRef<str> for DebugObject {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Value recorded in a tracing span or event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -248,101 +255,60 @@ pub enum TracedValue {
     Error(TracedError),
 }
 
-impl From<bool> for TracedValue {
-    fn from(value: bool) -> Self {
-        Self::Bool(value)
-    }
-}
-
-impl PartialEq<bool> for TracedValue {
-    fn eq(&self, other: &bool) -> bool {
-        match self {
-            Self::Bool(value) => value == other,
-            _ => false,
+macro_rules! impl_value_conversions {
+    (TracedValue :: $variant:ident ($source:ty)) => {
+        impl From<$source> for TracedValue {
+            fn from(value: $source) -> Self {
+                Self::$variant(value)
+            }
         }
-    }
-}
 
-impl From<i128> for TracedValue {
-    fn from(value: i128) -> Self {
-        Self::Int(value)
-    }
-}
-
-impl PartialEq<i128> for TracedValue {
-    fn eq(&self, other: &i128) -> bool {
-        match self {
-            Self::Int(value) => value == other,
-            _ => false,
+        impl PartialEq<$source> for TracedValue {
+            fn eq(&self, other: &$source) -> bool {
+                match self {
+                    Self::$variant(value) => value == other,
+                    _ => false,
+                }
+            }
         }
-    }
-}
 
-impl From<i64> for TracedValue {
-    fn from(value: i64) -> Self {
-        Self::Int(value.into())
-    }
-}
-
-impl PartialEq<i64> for TracedValue {
-    fn eq(&self, other: &i64) -> bool {
-        match self {
-            Self::Int(value) => *value == i128::from(*other),
-            _ => false,
+        impl PartialEq<TracedValue> for $source {
+            fn eq(&self, other: &TracedValue) -> bool {
+                other == self
+            }
         }
-    }
-}
+    };
 
-impl From<u128> for TracedValue {
-    fn from(value: u128) -> Self {
-        Self::UInt(value)
-    }
-}
-
-impl PartialEq<u128> for TracedValue {
-    fn eq(&self, other: &u128) -> bool {
-        match self {
-            Self::UInt(value) => value == other,
-            _ => false,
+    (TracedValue :: $variant:ident ($source:ty as $field_ty:ty)) => {
+        impl From<$source> for TracedValue {
+            fn from(value: $source) -> Self {
+                Self::$variant(value.into())
+            }
         }
-    }
-}
 
-impl From<u64> for TracedValue {
-    fn from(value: u64) -> Self {
-        Self::UInt(value.into())
-    }
-}
-
-impl PartialEq<u64> for TracedValue {
-    fn eq(&self, other: &u64) -> bool {
-        match self {
-            Self::UInt(value) => *value == u128::from(*other),
-            _ => false,
+        impl PartialEq<$source> for TracedValue {
+            fn eq(&self, other: &$source) -> bool {
+                match self {
+                    Self::$variant(value) => *value == <$field_ty>::from(*other),
+                    _ => false,
+                }
+            }
         }
-    }
-}
 
-impl From<f64> for TracedValue {
-    fn from(value: f64) -> Self {
-        Self::Float(value)
-    }
-}
-
-impl PartialEq<f64> for TracedValue {
-    fn eq(&self, other: &f64) -> bool {
-        match self {
-            Self::Float(value) => value == other,
-            _ => false,
+        impl PartialEq<TracedValue> for $source {
+            fn eq(&self, other: &TracedValue) -> bool {
+                other == self
+            }
         }
-    }
+    };
 }
 
-impl From<&str> for TracedValue {
-    fn from(value: &str) -> Self {
-        Self::String(value.to_owned())
-    }
-}
+impl_value_conversions!(TracedValue::Bool(bool));
+impl_value_conversions!(TracedValue::Int(i128));
+impl_value_conversions!(TracedValue::Int(i64 as i128));
+impl_value_conversions!(TracedValue::UInt(u128));
+impl_value_conversions!(TracedValue::UInt(u64 as u128));
+impl_value_conversions!(TracedValue::Float(f64));
 
 impl PartialEq<str> for TracedValue {
     fn eq(&self, other: &str) -> bool {
@@ -353,8 +319,36 @@ impl PartialEq<str> for TracedValue {
     }
 }
 
+impl PartialEq<TracedValue> for str {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
+    }
+}
+
+impl From<&str> for TracedValue {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_owned())
+    }
+}
+
+impl PartialEq<&str> for TracedValue {
+    fn eq(&self, other: &&str) -> bool {
+        match self {
+            Self::String(value) => value == *other,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<TracedValue> for &str {
+    fn eq(&self, other: &TracedValue) -> bool {
+        other == self
+    }
+}
+
 impl TracedValue {
-    fn debug(object: &dyn fmt::Debug) -> Self {
+    #[doc(hidden)] // public for testing purposes
+    pub fn debug(object: &dyn fmt::Debug) -> Self {
         Self::Object(DebugObject(format!("{object:?}")))
     }
 

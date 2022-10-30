@@ -9,6 +9,7 @@ description = "Tracing infrastructure for Tardigrade workflows"
 repository = "https://github.com/slowli/tracing-toolbox"
 
 [dependencies]
+predicates = { version = "2.1.1", default-features = false }
 tracing-core = "0.1.30"
 
 tracing-tunnel = { version = "0.1.0", path = "../tunnel" }
