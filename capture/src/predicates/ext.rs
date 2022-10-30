@@ -96,6 +96,36 @@ where
         iter.find(|item| predicate.eval(item.borrow()))
             .unwrap_or_else(|| panic!("no items have matched predicate {predicate}"))
     }
+
+    /// Checks that all of the items match the predicate.
+    ///
+    /// # Panics
+    ///
+    /// Panics with an informative message if any of items does not match the predicate.
+    pub fn all<P: Predicate<Item> + ?Sized>(self, predicate: &P) {
+        let mut iter = self.iter.into_iter();
+        if let Some(item) = iter.find(|item| !predicate.eval(item.borrow())) {
+            panic!(
+                "item does not match predicate {predicate}: {item:#?}",
+                item = item.borrow()
+            );
+        }
+    }
+
+    /// Checks that none of the items match the predicate.
+    ///
+    /// # Panics
+    ///
+    /// Panics with an informative message if any of items match the predicate.
+    pub fn none<P: Predicate<Item> + ?Sized>(self, predicate: &P) {
+        let mut iter = self.iter.into_iter();
+        if let Some(item) = iter.find(|item| predicate.eval(item.borrow())) {
+            panic!(
+                "item matched predicate {predicate}: {item:#?}",
+                item = item.borrow()
+            );
+        }
+    }
 }
 
 impl<Item, I: IntoIterator> Scanner<Item, I>

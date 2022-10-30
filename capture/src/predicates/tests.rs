@@ -227,4 +227,7 @@ fn using_extensions() {
 
     let event = events.scanner().last(&predicate);
     assert_eq!(event["val"], 1_i64);
+
+    events.scanner().all(&field("val", [always()]));
+    events.scanner().none(&level(LevelFilter::INFO));
 }

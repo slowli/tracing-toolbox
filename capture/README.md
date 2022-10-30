@@ -78,6 +78,8 @@ let predicate = level(Level::WARN)
     & field("result", 42_i64);
 // Checks that there is a single event satisfying `predicate`.
 storage.all_events().scanner().single(&predicate);
+// ...and that none of spans satisfy similar predicate.
+storage.spans().scanner().none(&level(Level::WARN));
 ```
 
 ## Alternatives / similar tools
