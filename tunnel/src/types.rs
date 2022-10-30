@@ -347,7 +347,8 @@ impl PartialEq<TracedValue> for &str {
 }
 
 impl TracedValue {
-    fn debug(object: &dyn fmt::Debug) -> Self {
+    #[doc(hidden)] // public for testing purposes
+    pub fn debug(object: &dyn fmt::Debug) -> Self {
         Self::Object(DebugObject(format!("{object:?}")))
     }
 

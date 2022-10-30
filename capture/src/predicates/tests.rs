@@ -12,7 +12,7 @@ use tracing_core::{
 
 use super::*;
 use crate::SpanStats;
-use tracing_tunnel::TracedValues;
+use tracing_tunnel::{TracedValue, TracedValues};
 
 static SITE: DefaultCallsite = DefaultCallsite::new(METADATA);
 static METADATA: &Metadata<'static> = &Metadata::new(
@@ -24,6 +24,16 @@ static METADATA: &Metadata<'static> = &Metadata::new(
     Some("predicate"),
     FieldSet::new(&["val"], tracing_core::identify_callsite!(&SITE)),
     Kind::SPAN,
+);
+static EVENT_METADATA: &Metadata<'static> = &Metadata::new(
+    "event at tracing_capture/predicates.rs:42",
+    "tracing_capture::predicate",
+    Level::DEBUG,
+    Some("predicate.rs"),
+    Some(42),
+    Some("predicate"),
+    FieldSet::new(&["val", "message"], tracing_core::identify_callsite!(&SITE)),
+    Kind::EVENT,
 );
 
 #[test]
@@ -161,4 +171,33 @@ fn compound_predicates_combining_and_or() {
         "tracing_capture::predicate"
     );
     assert_eq!(products[1].value().to_string(), "String(\"str\")");
+}
+
+#[test]
+fn message_predicates() {
+    let mut event = CapturedEvent {
+        metadata: EVENT_METADATA,
+        values: TracedValues::from_iter([
+            ("val", 42_i64.into()),
+            (
+                "message",
+                TracedValue::debug(&format_args!("completed computations")),
+            ),
+        ]),
+    };
+    let predicate = message(eq("completed computations"));
+    assert!(predicate.eval(&event));
+
+    event.values.remove("message");
+    assert!(!predicate.eval(&event));
+    event.values.insert("message", 555_u64.into());
+    assert!(!predicate.eval(&event));
+    event
+        .values
+        .insert("message", "completed computations".into());
+    assert!(predicate.eval(&event));
+
+    let predicate =
+        message(starts_with("completed")) & level(Level::DEBUG) & target("tracing_capture");
+    assert!(predicate.eval(&event));
 }
