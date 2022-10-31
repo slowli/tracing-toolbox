@@ -93,7 +93,7 @@ impl Predicate<str> for TargetStrPredicate<'_> {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.spans().scanner();
+/// let spans = storage.all_spans().scanner();
 /// let _ = spans.single(&target("capture"));
 /// let _ = spans.single(&target([starts_with("cap")]));
 /// ```
@@ -120,12 +120,12 @@ impl<P: Predicate<str>> fmt::Display for TargetPredicate<P> {
 
 impl<P: Predicate<str>> PredicateReflection for TargetPredicate<P> {}
 
-impl<P: Predicate<str>> Predicate<CapturedSpan> for TargetPredicate<P> {
-    fn eval(&self, variable: &CapturedSpan) -> bool {
+impl<P: Predicate<str>> Predicate<CapturedSpan<'_>> for TargetPredicate<P> {
+    fn eval(&self, variable: &CapturedSpan<'_>) -> bool {
         self.matches.eval(variable.metadata().target())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedSpan) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &CapturedSpan<'_>) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().target())?;
@@ -133,12 +133,12 @@ impl<P: Predicate<str>> Predicate<CapturedSpan> for TargetPredicate<P> {
     }
 }
 
-impl<P: Predicate<str>> Predicate<CapturedEvent> for TargetPredicate<P> {
-    fn eval(&self, variable: &CapturedEvent) -> bool {
+impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for TargetPredicate<P> {
+    fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
         self.matches.eval(variable.metadata().target())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedEvent) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().target())?;

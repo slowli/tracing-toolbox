@@ -14,6 +14,7 @@ repository = "https://github.com/slowli/tracing-toolbox"
 maintenance = { status = "experimental" }
 
 [dependencies]
+id-arena = "2.2.1"
 predicates = { version = "2.1.1", default-features = false }
 tracing-core = "0.1.30"
 

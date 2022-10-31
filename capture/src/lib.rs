@@ -27,8 +27,8 @@
 //!
 //! // Inspect the only captured span.
 //! let storage = storage.lock();
-//! assert_eq!(storage.spans().len(), 1);
-//! let span = &storage.spans()[0];
+//! assert_eq!(storage.all_spans().len(), 1);
+//! let span = &storage.all_spans()[0];
 //! assert_eq!(span["num"], 42_i64);
 //! assert_eq!(span.stats().entered, 1);
 //! assert!(span.stats().is_closed);
@@ -58,6 +58,7 @@
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
 
+use id_arena::Arena;
 use tracing_core::{
     span::{Attributes, Id, Record},
     Event, Metadata, Subscriber,
@@ -82,36 +83,51 @@ mod sealed {
 use tracing_tunnel::{TracedValue, TracedValues, ValueVisitor};
 
 /// Marker trait for captured objects (spans and events).
-pub trait Captured: 'static + fmt::Debug + sealed::Sealed {}
+pub trait Captured: fmt::Debug + sealed::Sealed {}
+
+#[derive(Debug)]
+struct CapturedEventInner {
+    metadata: &'static Metadata<'static>,
+    values: TracedValues<&'static str>,
+    parent_id: Option<CapturedSpanId>,
+}
+
+type CapturedEventId = id_arena::Id<CapturedEventInner>;
 
 /// Captured tracing event containing a reference to its [`Metadata`] and values that the event
 /// was created with.
-#[derive(Debug)]
-pub struct CapturedEvent {
-    metadata: &'static Metadata<'static>,
-    values: TracedValues<&'static str>,
+#[derive(Debug, Clone, Copy)]
+pub struct CapturedEvent<'a> {
+    inner: &'a CapturedEventInner,
+    storage: &'a Storage,
 }
 
-impl CapturedEvent {
+impl<'a> CapturedEvent<'a> {
     /// Provides a reference to the event metadata.
     pub fn metadata(&self) -> &'static Metadata<'static> {
-        self.metadata
+        self.inner.metadata
     }
 
     /// Iterates over values associated with the event.
     pub fn values(&self) -> impl Iterator<Item = (&'static str, &TracedValue)> + '_ {
-        self.values.iter().map(|(name, value)| (*name, value))
+        self.inner.values.iter().map(|(name, value)| (*name, value))
     }
 
     /// Returns a value for the specified field, or `None` if the value is not defined.
     pub fn value(&self, name: &str) -> Option<&TracedValue> {
-        self.values
+        self.inner
+            .values
             .iter()
             .find_map(|(s, value)| if *s == name { Some(value) } else { None })
     }
+
+    /// Returns the parent span for this event, or `None` if is not tied to a captured span.
+    pub fn parent(&self) -> Option<CapturedSpan<'a>> {
+        self.inner.parent_id.map(|id| self.storage.span(id))
+    }
 }
 
-impl ops::Index<&str> for CapturedEvent {
+impl ops::Index<&str> for CapturedEvent<'_> {
     type Output = TracedValue;
 
     fn index(&self, index: &str) -> &Self::Output {
@@ -120,8 +136,8 @@ impl ops::Index<&str> for CapturedEvent {
     }
 }
 
-impl sealed::Sealed for CapturedEvent {}
-impl Captured for CapturedEvent {}
+impl sealed::Sealed for CapturedEvent<'_> {}
+impl Captured for CapturedEvent<'_> {}
 
 /// Statistics about a [`CapturedSpan`].
 #[derive(Debug, Clone, Copy, Default)]
@@ -135,46 +151,70 @@ pub struct SpanStats {
     pub is_closed: bool,
 }
 
-/// Captured tracing span containing a reference to its [`Metadata`], values that the span
-/// was created with, [stats](SpanStats), and descendant [`CapturedEvent`]s.
 #[derive(Debug)]
-pub struct CapturedSpan {
+struct CapturedSpanInner {
     metadata: &'static Metadata<'static>,
     values: TracedValues<&'static str>,
     stats: SpanStats,
-    events: Vec<CapturedEvent>,
+    parent_id: Option<CapturedSpanId>,
+    child_ids: Vec<CapturedSpanId>,
+    event_ids: Vec<CapturedEventId>,
 }
 
-impl CapturedSpan {
+type CapturedSpanId = id_arena::Id<CapturedSpanInner>;
+
+/// Captured tracing span containing a reference to its [`Metadata`], values that the span
+/// was created with, [stats](SpanStats), and descendant [`CapturedEvent`]s.
+#[derive(Debug, Clone, Copy)]
+pub struct CapturedSpan<'a> {
+    inner: &'a CapturedSpanInner,
+    storage: &'a Storage,
+}
+
+impl<'a> CapturedSpan<'a> {
     /// Provides a reference to the span metadata.
     pub fn metadata(&self) -> &'static Metadata<'static> {
-        self.metadata
+        self.inner.metadata
     }
 
     /// Iterates over values that the span was created with, or which were recorded later.
     pub fn values(&self) -> impl Iterator<Item = (&'static str, &TracedValue)> + '_ {
-        self.values.iter().map(|(name, value)| (*name, value))
+        self.inner.values.iter().map(|(name, value)| (*name, value))
     }
 
     /// Returns a value for the specified field, or `None` if the value is not defined.
     pub fn value(&self, name: &str) -> Option<&TracedValue> {
-        self.values
+        self.inner
+            .values
             .iter()
             .find_map(|(s, value)| if *s == name { Some(value) } else { None })
     }
 
     /// Returns statistics about span operations.
     pub fn stats(&self) -> SpanStats {
-        self.stats
+        self.inner.stats
     }
 
     /// Returns events attached to this span.
-    pub fn events(&self) -> &[CapturedEvent] {
-        &self.events
+    pub fn events(&self) -> impl ExactSizeIterator<Item = CapturedEvent<'a>> + '_ {
+        self.inner
+            .event_ids
+            .iter()
+            .map(|&id| self.storage.event(id))
+    }
+
+    /// Returns the reference to the parent span, if any.
+    pub fn parent(&self) -> Option<Self> {
+        self.inner.parent_id.map(|id| self.storage.span(id))
+    }
+
+    /// Iterates over direct children of this span, in the order of their capture.
+    pub fn children(&self) -> impl Iterator<Item = CapturedSpan<'a>> + '_ {
+        self.inner.child_ids.iter().map(|&id| self.storage.span(id))
     }
 }
 
-impl ops::Index<&str> for CapturedSpan {
+impl ops::Index<&str> for CapturedSpan<'_> {
     type Output = TracedValue;
 
     fn index(&self, index: &str) -> &Self::Output {
@@ -183,8 +223,8 @@ impl ops::Index<&str> for CapturedSpan {
     }
 }
 
-impl sealed::Sealed for CapturedSpan {}
-impl Captured for CapturedSpan {}
+impl sealed::Sealed for CapturedSpan<'_> {}
+impl Captured for CapturedSpan<'_> {}
 
 /// Storage of captured tracing information.
 ///
@@ -192,70 +232,107 @@ impl Captured for CapturedSpan {}
 /// and can be accessed via [`lock()`](SharedStorage::lock()).
 #[derive(Debug)]
 pub struct Storage {
-    spans: Vec<CapturedSpan>,
-    root_events: Vec<CapturedEvent>,
+    spans: Arena<CapturedSpanInner>,
+    events: Arena<CapturedEventInner>,
 }
 
 impl Storage {
     fn new() -> Self {
         Self {
-            spans: vec![],
-            root_events: vec![],
+            spans: Arena::new(),
+            events: Arena::new(),
         }
     }
 
-    /// Returns captured spans in the order of capture.
-    pub fn spans(&self) -> &[CapturedSpan] {
-        &self.spans
+    fn span(&self, id: CapturedSpanId) -> CapturedSpan<'_> {
+        CapturedSpan {
+            inner: &self.spans[id],
+            storage: self,
+        }
     }
 
-    /// Returns captured root events (i.e., events that were emitted when no captured span
-    /// was entered) in the order of capture.
-    pub fn root_events(&self) -> &[CapturedEvent] {
-        &self.root_events
+    fn event(&self, id: CapturedEventId) -> CapturedEvent<'_> {
+        CapturedEvent {
+            inner: &self.events[id],
+            storage: self,
+        }
+    }
+
+    // FIXME: root spans / events
+
+    /// Returns captured spans in the order of capture.
+    pub fn all_spans(&self) -> impl ExactSizeIterator<Item = CapturedSpan<'_>> + '_ {
+        self.spans.iter().map(|(_, inner)| CapturedSpan {
+            inner,
+            storage: self,
+        })
     }
 
     /// Iterates over all captured events. The order of iteration is not specified.
-    pub fn all_events(&self) -> impl Iterator<Item = &CapturedEvent> + '_ {
-        self.spans
-            .iter()
-            .flat_map(CapturedSpan::events)
-            .chain(&self.root_events)
+    pub fn all_events(&self) -> impl ExactSizeIterator<Item = CapturedEvent<'_>> + '_ {
+        self.events.iter().map(|(_, inner)| CapturedEvent {
+            inner,
+            storage: self,
+        })
     }
 
-    fn push_span(&mut self, span: CapturedSpan) -> usize {
-        let idx = self.spans.len();
-        self.spans.push(span);
-        idx
+    fn push_span(
+        &mut self,
+        metadata: &'static Metadata<'static>,
+        values: TracedValues<&'static str>,
+        parent_id: Option<CapturedSpanId>,
+    ) -> CapturedSpanId {
+        let span_id = self.spans.alloc(CapturedSpanInner {
+            metadata,
+            values,
+            stats: SpanStats::default(),
+            parent_id,
+            child_ids: vec![],
+            event_ids: vec![],
+        });
+        if let Some(parent_id) = parent_id {
+            let span = self.spans.get_mut(parent_id).unwrap();
+            span.child_ids.push(span_id);
+        }
+        span_id
     }
 
-    fn on_span_enter(&mut self, idx: usize) {
-        let span = self.spans.get_mut(idx).unwrap();
+    fn on_span_enter(&mut self, id: CapturedSpanId) {
+        let span = self.spans.get_mut(id).unwrap();
         span.stats.entered += 1;
     }
 
-    fn on_span_exit(&mut self, idx: usize) {
-        let span = self.spans.get_mut(idx).unwrap();
+    fn on_span_exit(&mut self, id: CapturedSpanId) {
+        let span = self.spans.get_mut(id).unwrap();
         span.stats.exited += 1;
     }
 
-    fn on_span_closed(&mut self, idx: usize) {
-        let span = self.spans.get_mut(idx).unwrap();
+    fn on_span_closed(&mut self, id: CapturedSpanId) {
+        let span = self.spans.get_mut(id).unwrap();
         span.stats.is_closed = true;
     }
 
-    fn on_record(&mut self, idx: usize, values: TracedValues<&'static str>) {
-        let span = self.spans.get_mut(idx).unwrap();
+    fn on_record(&mut self, id: CapturedSpanId, values: TracedValues<&'static str>) {
+        let span = self.spans.get_mut(id).unwrap();
         span.values.extend(values);
     }
 
-    fn on_event(&mut self, span_idx: Option<usize>, event: CapturedEvent) {
-        if let Some(span_idx) = span_idx {
-            let span = self.spans.get_mut(span_idx).unwrap();
-            span.events.push(event);
-        } else {
-            self.root_events.push(event);
+    fn on_event(
+        &mut self,
+        metadata: &'static Metadata<'static>,
+        values: TracedValues<&'static str>,
+        parent_id: Option<CapturedSpanId>,
+    ) -> CapturedEventId {
+        let event_id = self.events.alloc(CapturedEventInner {
+            metadata,
+            values,
+            parent_id,
+        });
+        if let Some(parent_id) = parent_id {
+            let span = self.spans.get_mut(parent_id).unwrap();
+            span.event_ids.push(event_id);
         }
+        event_id
     }
 }
 
@@ -281,9 +358,6 @@ impl SharedStorage {
         self.inner.lock().unwrap()
     }
 }
-
-#[derive(Debug, Clone, Copy)]
-struct SpanIndex(usize);
 
 /// Tracing [`Layer`] that captures (optionally filtered) spans and events.
 ///
@@ -361,27 +435,25 @@ where
             return;
         }
 
+        let parent_id = if let Some(mut scope) = ctx.span_scope(id) {
+            scope.find_map(|span| span.extensions().get::<CapturedSpanId>().copied())
+        } else {
+            None
+        };
         let mut visitor = ValueVisitor::default();
         attrs.record(&mut visitor);
-        let span = CapturedSpan {
-            metadata: attrs.metadata(),
-            values: visitor.values,
-            stats: SpanStats::default(),
-            events: vec![],
-        };
-        let idx = self.lock().push_span(span);
-        ctx.span(id)
-            .unwrap()
-            .extensions_mut()
-            .insert(SpanIndex(idx));
+        let arena_id = self
+            .lock()
+            .push_span(attrs.metadata(), visitor.values, parent_id);
+        ctx.span(id).unwrap().extensions_mut().insert(arena_id);
     }
 
     fn on_record(&self, id: &Id, values: &Record<'_>, ctx: Context<'_, S>) {
         let span = ctx.span(id).unwrap();
-        if let Some(SpanIndex(idx)) = span.extensions().get::<SpanIndex>().copied() {
+        if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
             let mut visitor = ValueVisitor::default();
             values.record(&mut visitor);
-            self.lock().on_record(idx, visitor.values);
+            self.lock().on_record(id, visitor.values);
         };
     }
 
@@ -390,39 +462,35 @@ where
             return;
         }
 
-        let ancestor_span = if let Some(mut scope) = ctx.event_scope(event) {
-            scope.find_map(|span| span.extensions().get::<SpanIndex>().copied())
+        let parent_id = if let Some(mut scope) = ctx.event_scope(event) {
+            scope.find_map(|span| span.extensions().get::<CapturedSpanId>().copied())
         } else {
             None
         };
-        let span_idx = ancestor_span.map(|idx| idx.0);
         let mut visitor = ValueVisitor::default();
         event.record(&mut visitor);
-        let event = CapturedEvent {
-            metadata: event.metadata(),
-            values: visitor.values,
-        };
-        self.lock().on_event(span_idx, event);
+        self.lock()
+            .on_event(event.metadata(), visitor.values, parent_id);
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
         let span = ctx.span(id).unwrap();
-        if let Some(SpanIndex(idx)) = span.extensions().get::<SpanIndex>().copied() {
-            self.lock().on_span_enter(idx);
+        if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
+            self.lock().on_span_enter(id);
         };
     }
 
     fn on_exit(&self, id: &Id, ctx: Context<'_, S>) {
         let span = ctx.span(id).unwrap();
-        if let Some(SpanIndex(idx)) = span.extensions().get::<SpanIndex>().copied() {
-            self.lock().on_span_exit(idx);
+        if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
+            self.lock().on_span_exit(id);
         };
     }
 
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
         let span = ctx.span(&id).unwrap();
-        if let Some(SpanIndex(idx)) = span.extensions().get::<SpanIndex>().copied() {
-            self.lock().on_span_closed(idx);
+        if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
+            self.lock().on_span_closed(id);
         };
     }
 }

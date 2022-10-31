@@ -32,12 +32,12 @@
 //! // The resulting predicate can be used with `CapturedExt` trait.
 //! let storage: &Storage = // ...
 //! #   storage;
-//! let _ = storage.spans().scanner().first(&predicate);
+//! let _ = storage.all_spans().scanner().first(&predicate);
 //! let _ = storage.all_events().scanner().single(&level(Level::ERROR));
 //!
 //! // ...or converted back to a closure:
 //! let predicate = into_fn(predicate);
-//! let _ = storage.spans().iter().filter(|&span| predicate(span));
+//! let _ = storage.all_spans().iter().filter(|&span| predicate(span));
 //! // ^ Unfortunately, `filter()` creates a double reference, thus,
 //! // `filter(predicate)` doesn't work.
 //! # }

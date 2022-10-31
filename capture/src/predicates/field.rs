@@ -71,7 +71,7 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.spans().scanner();
+/// let spans = storage.all_spans().scanner();
 /// let _ = spans.single(&field("arg", [always()]));
 /// let _ = spans.single(&field("arg", 5_i64));
 /// ```
@@ -131,8 +131,8 @@ macro_rules! impl_predicate_for_field {
     };
 }
 
-impl_predicate_for_field!(CapturedSpan);
-impl_predicate_for_field!(CapturedEvent);
+impl_predicate_for_field!(CapturedSpan<'_>);
+impl_predicate_for_field!(CapturedEvent<'_>);
 
 #[doc(hidden)] // implementation detail (yet?)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,13 +210,13 @@ impl<P: Predicate<str>> fmt::Display for MessagePredicate<P> {
 
 impl<P: Predicate<str>> PredicateReflection for MessagePredicate<P> {}
 
-impl<P: Predicate<str>> Predicate<CapturedEvent> for MessagePredicate<P> {
-    fn eval(&self, variable: &CapturedEvent) -> bool {
+impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for MessagePredicate<P> {
+    fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
         let message = variable.value("message").and_then(str_presentation);
         message.map_or(false, |value| self.matches.eval(value))
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedEvent) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
         let message = variable.value("message").and_then(str_presentation);
         let message = if let Some(message) = message {
             message

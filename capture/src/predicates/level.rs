@@ -72,7 +72,7 @@ impl IntoLevelPredicate for LevelFilter {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.spans().scanner();
+/// let spans = storage.all_spans().scanner();
 /// let _ = spans.single(&level(Level::INFO));
 /// let _ = spans.first(&level(LevelFilter::DEBUG));
 /// let _ = spans.last(&level([gt(Level::WARN)]));
@@ -100,12 +100,12 @@ impl<P: Predicate<Level>> fmt::Display for LevelPredicate<P> {
 
 impl<P: Predicate<Level>> PredicateReflection for LevelPredicate<P> {}
 
-impl<P: Predicate<Level>> Predicate<CapturedSpan> for LevelPredicate<P> {
-    fn eval(&self, variable: &CapturedSpan) -> bool {
+impl<P: Predicate<Level>> Predicate<CapturedSpan<'_>> for LevelPredicate<P> {
+    fn eval(&self, variable: &CapturedSpan<'_>) -> bool {
         self.matches.eval(variable.metadata().level())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedSpan) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &CapturedSpan<'_>) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().level())?;
@@ -113,12 +113,12 @@ impl<P: Predicate<Level>> Predicate<CapturedSpan> for LevelPredicate<P> {
     }
 }
 
-impl<P: Predicate<Level>> Predicate<CapturedEvent> for LevelPredicate<P> {
-    fn eval(&self, variable: &CapturedEvent) -> bool {
+impl<P: Predicate<Level>> Predicate<CapturedEvent<'_>> for LevelPredicate<P> {
+    fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
         self.matches.eval(variable.metadata().level())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedEvent) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().level())?;

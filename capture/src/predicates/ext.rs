@@ -2,7 +2,7 @@
 
 use predicates::Predicate;
 
-use std::{borrow::Borrow, fmt, marker::PhantomData};
+use std::fmt;
 
 use crate::Captured;
 
@@ -14,20 +14,16 @@ use crate::Captured;
 /// [`CapturedSpan`]: crate::CapturedSpan
 /// [`CapturedEvent`]: crate::CapturedEvent
 pub trait ScannerExt: IntoIterator + Sized {
-    /// Type argument for the `Predicates` that will be used in the created [`Scanner`].
-    type PredicateArg: Captured;
     /// Wraps this collection into a [`Scanner`].
     ///
     /// This call does not convert `self` into an iterator right away, but rather does so
     /// on each call to the `Scanner`. This means that a `Scanner` may be `Copy`able
     /// (e.g., in the case of slices).
-    fn scanner(self) -> Scanner<Self::PredicateArg, Self>;
+    fn scanner(self) -> Scanner<Self>;
 }
 
-impl<'a, T: Captured, I: 'a + IntoIterator<Item = &'a T>> ScannerExt for I {
-    type PredicateArg = T;
-
-    fn scanner(self) -> Scanner<Self::PredicateArg, Self> {
+impl<T: Captured, I: IntoIterator<Item = T>> ScannerExt for I {
+    fn scanner(self) -> Scanner<Self> {
         Scanner::new(self)
     }
 }
@@ -36,33 +32,17 @@ impl<'a, T: Captured, I: 'a + IntoIterator<Item = &'a T>> ScannerExt for I {
 /// elements, and provides more informative error messages.
 ///
 /// Returned by [`ScannerExt::scanner()`]; see its docs for more details.
-#[derive(Debug)]
-pub struct Scanner<Item: ?Sized, I> {
+#[derive(Debug, Clone, Copy)]
+pub struct Scanner<I> {
     iter: I,
-    _item: PhantomData<fn() -> Item>,
 }
 
-impl<Item: ?Sized, I: Clone> Clone for Scanner<Item, I> {
-    fn clone(&self) -> Self {
-        Self {
-            iter: self.iter.clone(),
-            _item: PhantomData,
-        }
-    }
-}
-
-impl<Item: ?Sized, I: Copy> Copy for Scanner<Item, I> {}
-
-impl<Item, I: IntoIterator> Scanner<Item, I>
+impl<I: IntoIterator> Scanner<I>
 where
-    Item: fmt::Debug + ?Sized,
-    I::Item: Borrow<Item>,
+    I::Item: fmt::Debug,
 {
     fn new(iter: I) -> Self {
-        Self {
-            iter,
-            _item: PhantomData,
-        }
+        Self { iter }
     }
 
     /// Finds the single item matching the predicate.
@@ -70,17 +50,17 @@ where
     /// # Panics
     ///
     /// Panics with an informative message if no items, or multiple items match the predicate.
-    pub fn single<P: Predicate<Item> + ?Sized>(self, predicate: &P) -> I::Item {
+    pub fn single<P: Predicate<I::Item> + ?Sized>(self, predicate: &P) -> I::Item {
         let mut iter = self.iter.into_iter();
         let first = iter
-            .find(|item| predicate.eval(item.borrow()))
+            .find(|item| predicate.eval(item))
             .unwrap_or_else(|| panic!("no items have matched predicate {predicate}"));
 
-        let second = iter.find(|item| predicate.eval(item.borrow()));
+        let second = iter.find(|item| predicate.eval(item));
         if let Some(second) = second {
             panic!(
                 "multiple items match predicate {predicate}: {:#?}",
-                [first.borrow(), second.borrow()]
+                [first, second]
             );
         }
         first
@@ -91,9 +71,9 @@ where
     /// # Panics
     ///
     /// Panics with an informative message if no items match the predicate.
-    pub fn first<P: Predicate<Item> + ?Sized>(self, predicate: &P) -> I::Item {
+    pub fn first<P: Predicate<I::Item> + ?Sized>(self, predicate: &P) -> I::Item {
         let mut iter = self.iter.into_iter();
-        iter.find(|item| predicate.eval(item.borrow()))
+        iter.find(|item| predicate.eval(item))
             .unwrap_or_else(|| panic!("no items have matched predicate {predicate}"))
     }
 
@@ -102,13 +82,10 @@ where
     /// # Panics
     ///
     /// Panics with an informative message if any of items does not match the predicate.
-    pub fn all<P: Predicate<Item> + ?Sized>(self, predicate: &P) {
+    pub fn all<P: Predicate<I::Item> + ?Sized>(self, predicate: &P) {
         let mut iter = self.iter.into_iter();
-        if let Some(item) = iter.find(|item| !predicate.eval(item.borrow())) {
-            panic!(
-                "item does not match predicate {predicate}: {item:#?}",
-                item = item.borrow()
-            );
+        if let Some(item) = iter.find(|item| !predicate.eval(item)) {
+            panic!("item does not match predicate {predicate}: {item:#?}");
         }
     }
 
@@ -117,21 +94,17 @@ where
     /// # Panics
     ///
     /// Panics with an informative message if any of items match the predicate.
-    pub fn none<P: Predicate<Item> + ?Sized>(self, predicate: &P) {
+    pub fn none<P: Predicate<I::Item> + ?Sized>(self, predicate: &P) {
         let mut iter = self.iter.into_iter();
-        if let Some(item) = iter.find(|item| predicate.eval(item.borrow())) {
-            panic!(
-                "item matched predicate {predicate}: {item:#?}",
-                item = item.borrow()
-            );
+        if let Some(item) = iter.find(|item| predicate.eval(item)) {
+            panic!("item matched predicate {predicate}: {item:#?}");
         }
     }
 }
 
-impl<Item, I: IntoIterator> Scanner<Item, I>
+impl<I: IntoIterator> Scanner<I>
 where
-    Item: fmt::Debug + ?Sized,
-    I::Item: Borrow<Item>,
+    I::Item: fmt::Debug,
     I::IntoIter: DoubleEndedIterator,
 {
     /// Finds the last item matching the predicate.
@@ -139,9 +112,9 @@ where
     /// # Panics
     ///
     /// Panics with an informative message if no items match the predicate.
-    pub fn last<P: Predicate<Item> + ?Sized>(self, predicate: &P) -> I::Item {
+    pub fn last<P: Predicate<I::Item> + ?Sized>(self, predicate: &P) -> I::Item {
         let mut iter = self.iter.into_iter().rev();
-        iter.find(|item| predicate.eval(item.borrow()))
+        iter.find(|item| predicate.eval(item))
             .unwrap_or_else(|| panic!("no items have matched predicate {predicate}"))
     }
 }

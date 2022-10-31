@@ -32,7 +32,7 @@ use crate::CapturedSpan;
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.spans().scanner();
+/// let spans = storage.all_spans().scanner();
 /// let _ = spans.single(&name(eq("compute")));
 /// let _ = spans.single(&name(starts_with("co")));
 /// ```
@@ -56,12 +56,12 @@ impl<P: Predicate<str>> fmt::Display for NamePredicate<P> {
 
 impl<P: Predicate<str>> PredicateReflection for NamePredicate<P> {}
 
-impl<P: Predicate<str>> Predicate<CapturedSpan> for NamePredicate<P> {
-    fn eval(&self, variable: &CapturedSpan) -> bool {
+impl<P: Predicate<str>> Predicate<CapturedSpan<'_>> for NamePredicate<P> {
+    fn eval(&self, variable: &CapturedSpan<'_>) -> bool {
         self.matches.eval(variable.metadata().name())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedSpan) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &CapturedSpan<'_>) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().name())?;
