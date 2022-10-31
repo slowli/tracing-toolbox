@@ -10,7 +10,7 @@ use std::borrow::Cow;
 mod fib;
 
 use tracing_capture::{
-    predicates::{level, message, name, parent, ScanExt},
+    predicates::{ancestor, field, level, message, name, parent, ScanExt},
     CaptureLayer, SharedStorage, Storage,
 };
 use tracing_tunnel::{
@@ -239,4 +239,47 @@ fn capturing_events_with_indirect_ancestor() {
     let predicate = message(eq("doubled")) & parent(level(Level::INFO) & name(eq("wrapper")));
     let span_event = storage.scan_events().single(&predicate);
     assert_eq!(span_event["value"], 5_i64);
+}
+
+#[test]
+fn capturing_span_hierarchy() {
+    #[tracing::instrument(level = "debug", ret)]
+    fn factorial(value: u32) -> u32 {
+        tracing::info!(value, "doubled");
+        if value == 0 {
+            1
+        } else {
+            value * factorial(value - 1)
+        }
+    }
+
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || factorial(5));
+
+    let storage = storage.lock();
+    assert_eq!(storage.all_spans().len(), 6);
+    assert_eq!(storage.all_events().len(), 12);
+    assert_eq!(storage.root_spans().len(), 1);
+    assert_eq!(storage.root_events().len(), 0);
+
+    let inner_span = storage.all_spans().rev().next().unwrap();
+    assert_eq!(inner_span["value"], 0_u64);
+    let ancestor_values: Vec<_> = inner_span
+        .ancestors()
+        .filter_map(|span| span["value"].as_uint())
+        .collect();
+    assert_eq!(ancestor_values, [1, 2, 3, 4, 5]);
+
+    let middle_span = storage.scan_spans().single(&field("value", 3_u64));
+    let ancestor_values: Vec<_> = middle_span
+        .ancestors()
+        .filter_map(|span| span["value"].as_uint())
+        .collect();
+    assert_eq!(ancestor_values, [4, 5]);
+
+    let event_filter = parent(field("value", 3_u64)) & message(eq("doubled"));
+    storage.scan_events().single(&event_filter);
+    let event_filter = field("value", 2_u64) & ancestor(field("value", 3_u64));
+    storage.scan_events().single(&event_filter);
 }

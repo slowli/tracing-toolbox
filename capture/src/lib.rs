@@ -128,6 +128,12 @@ impl<'a> CapturedEvent<'a> {
     pub fn parent(&self) -> Option<CapturedSpan<'a>> {
         self.inner.parent_id.map(|id| self.storage.span(id))
     }
+
+    /// Returns the references to the ancestor spans, starting from the direct parent
+    /// and ending in one of [root spans](Storage::root_spans()).
+    pub fn ancestors(&self) -> impl Iterator<Item = CapturedSpan<'a>> + '_ {
+        std::iter::successors(self.parent(), CapturedSpan::parent)
+    }
 }
 
 impl ops::Index<&str> for CapturedEvent<'_> {
@@ -206,6 +212,12 @@ impl<'a> CapturedSpan<'a> {
     /// Returns the reference to the parent span, if any.
     pub fn parent(&self) -> Option<Self> {
         self.inner.parent_id.map(|id| self.storage.span(id))
+    }
+
+    /// Returns the references to the ancestor spans, starting from the direct parent
+    /// and ending in one of [root spans](Storage::root_spans()).
+    pub fn ancestors(&self) -> impl Iterator<Item = CapturedSpan<'a>> + '_ {
+        std::iter::successors(self.parent(), Self::parent)
     }
 
     /// Iterates over direct children of this span, in the order of their capture.

@@ -61,7 +61,7 @@ pub use self::{
     field::{field, message, FieldPredicate, IntoFieldPredicate, MessagePredicate},
     level::{level, IntoLevelPredicate, LevelPredicate},
     name::{name, NamePredicate},
-    parent::{parent, ParentPredicate},
+    parent::{ancestor, parent, AncestorPredicate, ParentPredicate},
     target::{target, IntoTargetPredicate, TargetPredicate},
 };
 
