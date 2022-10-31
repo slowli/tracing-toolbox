@@ -60,15 +60,11 @@
 
 use tracing_core::Metadata;
 
-use std::{fmt, ops};
+use std::ops;
 
 mod iter;
 mod layer;
 pub mod predicates;
-
-mod sealed {
-    pub trait Sealed {}
-}
 
 pub use crate::{
     iter::{CapturedEvents, CapturedSpans},
@@ -76,9 +72,6 @@ pub use crate::{
 };
 
 use tracing_tunnel::{TracedValue, TracedValues};
-
-/// Marker trait for captured objects (spans and events).
-pub trait Captured: fmt::Debug + sealed::Sealed {}
 
 #[derive(Debug)]
 struct CapturedEventInner {
@@ -136,9 +129,6 @@ impl ops::Index<&str> for CapturedEvent<'_> {
             .unwrap_or_else(|| panic!("field `{index}` is not contained in event"))
     }
 }
-
-impl sealed::Sealed for CapturedEvent<'_> {}
-impl Captured for CapturedEvent<'_> {}
 
 /// Statistics about a [`CapturedSpan`].
 #[derive(Debug, Clone, Copy, Default)]
@@ -226,9 +216,6 @@ impl ops::Index<&str> for CapturedSpan<'_> {
             .unwrap_or_else(|| panic!("field `{index}` is not contained in span"))
     }
 }
-
-impl sealed::Sealed for CapturedSpan<'_> {}
-impl Captured for CapturedSpan<'_> {}
 
 #[cfg(doctest)]
 doc_comment::doctest!("../README.md");
