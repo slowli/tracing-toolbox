@@ -173,7 +173,7 @@ fn message_predicates() {
             TracedValue::debug(&format_args!("completed computations")),
         ),
     ]);
-    let event_id = storage.on_event(EVENT_METADATA, values, None);
+    let event_id = storage.push_event(EVENT_METADATA, values, None);
     let event = storage.event(event_id);
     let predicate = message(eq("completed computations"));
     assert!(predicate.eval(&event));
@@ -206,7 +206,7 @@ fn using_extensions() {
                 TracedValue::debug(&format_args!("completed computations")),
             ),
         ]);
-        storage.on_event(EVENT_METADATA, values, None)
+        storage.push_event(EVENT_METADATA, values, None)
     });
     let events = event_ids.map(|id| storage.event(id));
 

@@ -74,11 +74,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod iter;
 pub mod predicates;
 
 mod sealed {
     pub trait Sealed {}
 }
+
+pub use crate::iter::{CapturedEvents, CapturedSpans};
 
 use tracing_tunnel::{TracedValue, TracedValues, ValueVisitor};
 
@@ -196,11 +199,8 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Returns events attached to this span.
-    pub fn events(&self) -> impl ExactSizeIterator<Item = CapturedEvent<'a>> + '_ {
-        self.inner
-            .event_ids
-            .iter()
-            .map(|&id| self.storage.event(id))
+    pub fn events(&self) -> CapturedEvents<'_> {
+        CapturedEvents::from_slice(self.storage, &self.inner.event_ids)
     }
 
     /// Returns the reference to the parent span, if any.
@@ -209,8 +209,8 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Iterates over direct children of this span, in the order of their capture.
-    pub fn children(&self) -> impl Iterator<Item = CapturedSpan<'a>> + '_ {
-        self.inner.child_ids.iter().map(|&id| self.storage.span(id))
+    pub fn children(&self) -> CapturedSpans<'_> {
+        CapturedSpans::from_slice(self.storage, &self.inner.child_ids)
     }
 }
 
@@ -261,19 +261,13 @@ impl Storage {
     // FIXME: root spans / events
 
     /// Returns captured spans in the order of capture.
-    pub fn all_spans(&self) -> impl ExactSizeIterator<Item = CapturedSpan<'_>> + '_ {
-        self.spans.iter().map(|(_, inner)| CapturedSpan {
-            inner,
-            storage: self,
-        })
+    pub fn all_spans(&self) -> CapturedSpans<'_> {
+        CapturedSpans::from_arena(self)
     }
 
     /// Iterates over all captured events. The order of iteration is not specified.
-    pub fn all_events(&self) -> impl ExactSizeIterator<Item = CapturedEvent<'_>> + '_ {
-        self.events.iter().map(|(_, inner)| CapturedEvent {
-            inner,
-            storage: self,
-        })
+    pub fn all_events(&self) -> CapturedEvents<'_> {
+        CapturedEvents::from_arena(self)
     }
 
     fn push_span(
@@ -317,7 +311,7 @@ impl Storage {
         span.values.extend(values);
     }
 
-    fn on_event(
+    fn push_event(
         &mut self,
         metadata: &'static Metadata<'static>,
         values: TracedValues<&'static str>,
@@ -470,7 +464,7 @@ where
         let mut visitor = ValueVisitor::default();
         event.record(&mut visitor);
         self.lock()
-            .on_event(event.metadata(), visitor.values, parent_id);
+            .push_event(event.metadata(), visitor.values, parent_id);
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
