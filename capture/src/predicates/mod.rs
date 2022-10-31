@@ -9,6 +9,7 @@
 //! - [`target()`] checks the span / event target
 //! - [`field()`] checks a specific span / event field
 //! - [`message()`] checks the event message
+//! - [`parent()`] checks the direct parent span of an event / span
 //!
 //! These predicates can be combined with bitwise operators, `&` and `|`.
 //! The [`ScanExt`] trait may be used to simplify assertions with predicates. The remaining
@@ -48,6 +49,7 @@ mod ext;
 mod field;
 mod level;
 mod name;
+mod parent;
 mod target;
 
 #[cfg(test)]
@@ -59,6 +61,7 @@ pub use self::{
     field::{field, message, FieldPredicate, IntoFieldPredicate, MessagePredicate},
     level::{level, IntoLevelPredicate, LevelPredicate},
     name::{name, NamePredicate},
+    parent::{parent, ParentPredicate},
     target::{target, IntoTargetPredicate, TargetPredicate},
 };
 

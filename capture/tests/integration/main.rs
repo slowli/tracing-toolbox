@@ -1,6 +1,7 @@
 //! Integration tests for tracing capture.
 
 use assert_matches::assert_matches;
+use predicates::ord::eq;
 use tracing_core::{Level, LevelFilter};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
@@ -8,7 +9,10 @@ use std::borrow::Cow;
 
 mod fib;
 
-use tracing_capture::{CaptureLayer, SharedStorage, Storage};
+use tracing_capture::{
+    predicates::{level, message, name, parent, ScanExt},
+    CaptureLayer, SharedStorage, Storage,
+};
 use tracing_tunnel::{
     CallSiteData, CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue,
     TracedValues, TracingEvent, TracingEventReceiver, TracingLevel,
@@ -231,4 +235,8 @@ fn capturing_events_with_indirect_ancestor() {
     assert_eq!(root_events.len(), 1);
     let root_event = root_events.next().unwrap();
     assert_eq!(root_event["value"], -3_i64);
+
+    let predicate = message(eq("doubled")) & parent(level(Level::INFO) & name(eq("wrapper")));
+    let span_event = storage.scan_events().single(&predicate);
+    assert_eq!(span_event["value"], 5_i64);
 }
