@@ -5,8 +5,18 @@ edition = "2021"
 authors = ["Alex Ostrovski <ostrovski.alex@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+keywords = ["tracing", "logging", "wasm"]
+categories = ["development-tools::debugging", "development-tools::ffi", "wasm"]
 description = "Tunnelling tracing information across API boundary"
 repository = "https://github.com/slowli/tracing-toolbox"
+
+[package.metadata.docs.rs]
+all-features = true
+# Set `docsrs` to enable unstable `doc(cfg(...))` attributes.
+rustdoc-args = ["--cfg", "docsrs"]
+
+[badges]
+maintenance = { status = "experimental" }
 
 [dependencies]
 linked-hash-map = { version = "0.5.6", features = ["serde_impl"] }
