@@ -198,7 +198,7 @@ fn message_predicates() {
 #[test]
 fn using_extensions() {
     let mut storage = Storage::new();
-    let event_ids = [0_u64, 1, 2, 3, 4].map(|val| {
+    for val in 0_i64..5 {
         let values = TracedValues::from_iter([
             ("val", val.into()),
             (
@@ -206,21 +206,19 @@ fn using_extensions() {
                 TracedValue::debug(&format_args!("completed computations")),
             ),
         ]);
-        storage.push_event(EVENT_METADATA, values, None)
-    });
-    let events = event_ids.map(|id| storage.event(id));
+        storage.push_event(EVENT_METADATA, values, None);
+    }
+    let scanner = storage.scan_events();
 
     let predicate =
         level(LevelFilter::DEBUG) & message(starts_with("completed")) & field("val", 1_i64);
-    let scanner = events.scanner();
     let event = scanner.single(&predicate);
     assert_eq!(event["val"], 1_i64);
     let event = scanner.first(&field("val", [always()]));
     assert_eq!(event["val"], 0_i64);
-
-    let event = events.scanner().last(&predicate);
+    let event = scanner.last(&predicate);
     assert_eq!(event["val"], 1_i64);
 
-    events.scanner().all(&field("val", [always()]));
-    events.scanner().none(&level(LevelFilter::INFO));
+    scanner.all(&field("val", [always()]));
+    scanner.none(&level(LevelFilter::INFO));
 }

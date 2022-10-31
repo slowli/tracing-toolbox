@@ -28,13 +28,13 @@
 //! // Inspect the only captured span.
 //! let storage = storage.lock();
 //! assert_eq!(storage.all_spans().len(), 1);
-//! let span = &storage.all_spans()[0];
+//! let span = storage.all_spans().next().unwrap();
 //! assert_eq!(span["num"], 42_i64);
 //! assert_eq!(span.stats().entered, 1);
 //! assert!(span.stats().is_closed);
 //!
 //! // Inspect the only event in the span.
-//! let event = &span.events()[0];
+//! let event = span.events().next().unwrap();
 //! assert_eq!(*event.metadata().level(), Level::WARN);
 //! assert_eq!(
 //!     event["message"].as_debug_str(),
@@ -199,7 +199,7 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Returns events attached to this span.
-    pub fn events(&self) -> CapturedEvents<'_> {
+    pub fn events(&self) -> CapturedEvents<'a> {
         CapturedEvents::from_slice(self.storage, &self.inner.event_ids)
     }
 
@@ -209,7 +209,7 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Iterates over direct children of this span, in the order of their capture.
-    pub fn children(&self) -> CapturedSpans<'_> {
+    pub fn children(&self) -> CapturedSpans<'a> {
         CapturedSpans::from_slice(self.storage, &self.inner.child_ids)
     }
 }
@@ -265,7 +265,7 @@ impl Storage {
         CapturedSpans::from_arena(self)
     }
 
-    /// Iterates over all captured events. The order of iteration is not specified.
+    /// Iterates over all captured events in the order of capture.
     pub fn all_events(&self) -> CapturedEvents<'_> {
         CapturedEvents::from_arena(self)
     }

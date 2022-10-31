@@ -21,7 +21,7 @@ use crate::CapturedSpan;
 /// ```
 /// # use predicates::{ord::eq, str::starts_with};
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{name, ScannerExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{name, ScanExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -32,7 +32,7 @@ use crate::CapturedSpan;
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.all_spans().scanner();
+/// let spans = storage.scan_spans();
 /// let _ = spans.single(&name(eq("compute")));
 /// let _ = spans.single(&name(starts_with("co")));
 /// ```

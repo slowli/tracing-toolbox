@@ -11,7 +11,7 @@
 //! - [`message()`] checks the event message
 //!
 //! These predicates can be combined with bitwise operators, `&` and `|`.
-//! The [`ScannerExt`] trait may be used to simplify assertions with predicates. The remaining
+//! The [`ScanExt`] trait may be used to simplify assertions with predicates. The remaining
 //! traits and structs are lower-level plumbing and rarely need to be used directly.
 //!
 //! [`CapturedSpan`]: crate::CapturedSpan
@@ -32,14 +32,11 @@
 //! // The resulting predicate can be used with `CapturedExt` trait.
 //! let storage: &Storage = // ...
 //! #   storage;
-//! let _ = storage.all_spans().scanner().first(&predicate);
-//! let _ = storage.all_events().scanner().single(&level(Level::ERROR));
+//! let _ = storage.scan_spans().first(&predicate);
+//! let _ = storage.scan_events().single(&level(Level::ERROR));
 //!
 //! // ...or converted back to a closure:
-//! let predicate = into_fn(predicate);
-//! let _ = storage.all_spans().iter().filter(|&span| predicate(span));
-//! // ^ Unfortunately, `filter()` creates a double reference, thus,
-//! // `filter(predicate)` doesn't work.
+//! let _ = storage.all_spans().filter(into_fn(predicate));
 //! # }
 //! ```
 
@@ -58,7 +55,7 @@ mod tests;
 
 pub use self::{
     combinators::{And, Or},
-    ext::{Scanner, ScannerExt},
+    ext::{ScanExt, Scanner},
     field::{field, message, FieldPredicate, IntoFieldPredicate, MessagePredicate},
     level::{level, IntoLevelPredicate, LevelPredicate},
     name::{name, NamePredicate},

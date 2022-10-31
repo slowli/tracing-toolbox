@@ -61,7 +61,7 @@ impl IntoLevelPredicate for LevelFilter {
 /// # use predicates::ord::gt;
 /// # use tracing_core::{Level, LevelFilter};
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{level, ScannerExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{level, ScanExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -72,7 +72,7 @@ impl IntoLevelPredicate for LevelFilter {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.all_spans().scanner();
+/// let spans = storage.scan_spans();
 /// let _ = spans.single(&level(Level::INFO));
 /// let _ = spans.first(&level(LevelFilter::DEBUG));
 /// let _ = spans.last(&level([gt(Level::WARN)]));
