@@ -227,7 +227,8 @@ fn capturing_events_with_indirect_ancestor() {
     assert!(span_event.value("message").is_some());
     assert_eq!(span_event["value"], 5_i64);
 
-    /*let root_events = storage.root_events();
+    let mut root_events = storage.root_events();
     assert_eq!(root_events.len(), 1);
-    assert_eq!(root_events[0]["value"], -3_i64);*/
+    let root_event = root_events.next().unwrap();
+    assert_eq!(root_event["value"], -3_i64);
 }

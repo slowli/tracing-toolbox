@@ -13,12 +13,17 @@ use crate::{CapturedEvents, CapturedSpan, CapturedSpans, Storage};
 ///
 /// [`CapturedEvent`]: crate::CapturedEvent
 pub trait ScanExt<'a>: Sized {
-    /// Creates a scanner for the spans contained by this holder.
+    /// Creates a scanner for the spans contained by this holder. What is meant by "contained"
+    /// (i.e., whether the scan is deep or shallow), depends on the holder type and is documented
+    /// at the corresponding impl.
     fn scan_spans(self) -> Scanner<Self, CapturedSpans<'a>>;
-    /// Creates a scanner for the events contained by this holder.
+    /// Creates a scanner for the events contained by this holder. What is meant by "contained"
+    /// (i.e., whether the scan is deep or shallow), depends on the holder type and is documented
+    /// at the corresponding impl.
     fn scan_events(self) -> Scanner<Self, CapturedEvents<'a>>;
 }
 
+/// Scans for `Storage` are deep; they include *all* captured spans / events, not just root ones.
 impl<'a> ScanExt<'a> for &'a Storage {
     fn scan_spans(self) -> Scanner<Self, CapturedSpans<'a>> {
         Scanner::new(self, Storage::all_spans)
@@ -29,6 +34,8 @@ impl<'a> ScanExt<'a> for &'a Storage {
     }
 }
 
+/// Scans for `CapturedSpan` are shallow, i.e. include only direct children spans / events.
+// TODO: implement and use deep scan?
 impl<'a> ScanExt<'a> for CapturedSpan<'a> {
     fn scan_spans(self) -> Scanner<Self, CapturedSpans<'a>> {
         Scanner::new(self, |span| span.children())

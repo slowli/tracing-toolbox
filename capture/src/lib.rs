@@ -233,14 +233,18 @@ impl Captured for CapturedSpan<'_> {}
 #[derive(Debug)]
 pub struct Storage {
     spans: Arena<CapturedSpanInner>,
+    root_span_ids: Vec<CapturedSpanId>,
     events: Arena<CapturedEventInner>,
+    root_event_ids: Vec<CapturedEventId>,
 }
 
 impl Storage {
     fn new() -> Self {
         Self {
             spans: Arena::new(),
+            root_span_ids: vec![],
             events: Arena::new(),
+            root_event_ids: vec![],
         }
     }
 
@@ -258,16 +262,26 @@ impl Storage {
         }
     }
 
-    // FIXME: root spans / events
-
-    /// Returns captured spans in the order of capture.
+    /// Iterates over captured spans in the order of capture.
     pub fn all_spans(&self) -> CapturedSpans<'_> {
         CapturedSpans::from_arena(self)
+    }
+
+    /// Iterates over root spans (i.e., spans that do not have a captured parent span)
+    /// in the order of capture.
+    pub fn root_spans(&self) -> CapturedSpans<'_> {
+        CapturedSpans::from_slice(self, &self.root_span_ids)
     }
 
     /// Iterates over all captured events in the order of capture.
     pub fn all_events(&self) -> CapturedEvents<'_> {
         CapturedEvents::from_arena(self)
+    }
+
+    /// Iterates over root events (i.e., events that do not have a captured parent span)
+    /// in the order of capture.
+    pub fn root_events(&self) -> CapturedEvents<'_> {
+        CapturedEvents::from_slice(self, &self.root_event_ids)
     }
 
     fn push_span(
@@ -287,6 +301,8 @@ impl Storage {
         if let Some(parent_id) = parent_id {
             let span = self.spans.get_mut(parent_id).unwrap();
             span.child_ids.push(span_id);
+        } else {
+            self.root_span_ids.push(span_id);
         }
         span_id
     }
@@ -325,6 +341,8 @@ impl Storage {
         if let Some(parent_id) = parent_id {
             let span = self.spans.get_mut(parent_id).unwrap();
             span.event_ids.push(event_id);
+        } else {
+            self.root_event_ids.push(event_id);
         }
         event_id
     }
