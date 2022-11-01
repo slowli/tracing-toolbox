@@ -77,6 +77,9 @@ impl Predicate<str> for TargetStrPredicate<'_> {
 /// - Any `str` `Predicate`. To bypass Rust orphaning rules, the predicate
 ///   must be enclosed in square brackets (i.e., a one-value array).
 ///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
+///
 /// # Examples
 ///
 /// ```
@@ -105,6 +108,9 @@ pub fn target<P: IntoTargetPredicate>(matches: P) -> TargetPredicate<P::Predicat
 
 /// Predicate for the target of a [`CapturedSpan`] or [`CapturedEvent`] returned by
 /// the [`target()`] function.
+///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TargetPredicate<P> {
     matches: P,

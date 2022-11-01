@@ -55,6 +55,8 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 /// - Any `Predicate` for [`TracedValue`]. To bypass Rust orphaning rules, the predicate
 ///   must be enclosed in square brackets (i.e., a one-value array).
 ///
+/// [`CapturedSpan`]: crate::CapturedSpan
+///
 /// # Examples
 ///
 /// ```
@@ -87,6 +89,8 @@ pub fn field<P: IntoFieldPredicate>(
 
 /// Predicate for a particular field of a [`CapturedSpan`] or [`CapturedEvent`] returned by
 /// the [`field()`] function.
+///
+/// [`CapturedSpan`]: crate::CapturedSpan
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FieldPredicate<P> {
     name: &'static str,

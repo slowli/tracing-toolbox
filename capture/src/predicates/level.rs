@@ -55,6 +55,9 @@ impl IntoLevelPredicate for LevelFilter {
 /// - Any `Predicate` for [`Level`]. To bypass Rust orphaning rules, the predicate
 ///   must be enclosed in square brackets (i.e., a one-value array).
 ///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
+///
 /// # Examples
 ///
 /// ```
@@ -85,6 +88,9 @@ pub fn level<P: IntoLevelPredicate>(matches: P) -> LevelPredicate<P::Predicate> 
 
 /// Predicate for the [`Level`] of a [`CapturedSpan`] or [`CapturedEvent`] returned by
 /// the [`level()`] function.
+///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LevelPredicate<P> {
     matches: P,

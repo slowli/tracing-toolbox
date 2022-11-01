@@ -10,6 +10,7 @@
 //! - [`field()`] checks a specific span / event field
 //! - [`message()`] checks the event message
 //! - [`parent()`] checks the direct parent span of an event / span
+//! - [`ancestor()`] checks the ancestor spans of an event / span
 //!
 //! These predicates can be combined with bitwise operators, `&` and `|`.
 //! The [`ScanExt`] trait may be used to simplify assertions with predicates. The remaining
@@ -78,7 +79,7 @@ pub use self::{
 /// let predicate = into_fn(target("tracing") & level(Level::INFO));
 /// let events: &[CapturedEvent] = // ...
 /// #   &[];
-/// let matching_events = events.iter().filter(|&evt| predicate(evt));
+/// let matching_events = events.iter().copied().filter(predicate);
 /// // Do something with `matching_events`...
 /// ```
 pub fn into_fn<Item>(predicate: impl Predicate<Item>) -> impl Fn(&Item) -> bool {

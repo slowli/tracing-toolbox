@@ -3,6 +3,8 @@
 //! The core type in this crate is [`CaptureLayer`], a tracing [`Layer`] that can be used
 //! to capture tracing spans and events.
 //!
+//! [`Layer`]: tracing_subscriber::Layer
+//!
 //! # Examples
 //!
 //! ```
@@ -94,6 +96,33 @@ type CapturedEventId = id_arena::Id<CapturedEventInner>;
 /// to the capture order. Events are considered equal iff both are aliases of the same event;
 /// i.e., equality is reference-based rather than content-based.
 /// Two events from different [`Storage`]s are not ordered and are always non-equal.
+///
+/// Values recorded with the event can be accessed by indexing or using [`Self::value()`],
+/// or iterated over using [`Self::values()`].
+///
+/// # Examples
+///
+/// ```
+/// # use tracing_core::Level;
+/// # use tracing_capture::CapturedEvent;
+/// # fn test_wrapper(event: CapturedEvent) {
+/// let event: CapturedEvent = // ...
+/// #   event;
+/// // Accessing event metadata and fields:
+/// assert_eq!(*event.metadata().level(), Level::INFO);
+/// assert_eq!(event["return"], 42_u64);
+/// assert_eq!(event.message(), Some("finished computations"));
+/// assert!(event.value("err").is_none());
+/// // Filtering unsigned integer values:
+/// let numbers = event.values().filter_map(|(_, val)| val.as_uint());
+///
+/// // Accessing the parent span:
+/// let parent_name = event.parent().unwrap().metadata().name();
+/// assert!(event
+///     .ancestors()
+///     .any(|span| span.metadata().name() == "test"));
+/// # }
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct CapturedEvent<'a> {
     inner: &'a CapturedEventInner,
@@ -201,6 +230,41 @@ type CapturedSpanId = id_arena::Id<CapturedSpanInner>;
 /// to the capture order. Spans are considered equal iff both are aliases of the same span;
 /// i.e., equality is reference-based rather than content-based.
 /// Two spans from different [`Storage`]s are not ordered and are always non-equal.
+///
+/// Values recorded with the span can be accessed by indexing or using [`Self::value()`],
+/// or iterated over using [`Self::values()`].
+///
+/// # Examples
+///
+/// ```
+/// # use tracing_core::Level;
+/// # use tracing_capture::CapturedSpan;
+/// # fn test_wrapper(span: CapturedSpan) {
+/// let span: CapturedSpan = // ...
+/// #   span;
+/// // Accessing event metadata and fields:
+/// assert_eq!(*span.metadata().level(), Level::INFO);
+/// assert_eq!(span["arg"], 42_u64);
+/// assert!(span.value("other_arg").is_none());
+/// // Filtering unsigned integer values:
+/// let numbers = span.values().filter_map(|(_, val)| val.as_uint());
+///
+/// // Accessing the parent span:
+/// let parent_name = span.parent().unwrap().metadata().name();
+/// assert!(span
+///     .ancestors()
+///     .any(|span| span.metadata().name() == "test"));
+///
+/// // Accessing child spans and events:
+/// assert!(span.children().len() > 0);
+/// let child_messages: Vec<&str> = span
+///     .events()
+///     .filter_map(|event| event.message())
+///     .collect();
+/// let descendant_span =
+///     span.descendants().find(|span| span["input"] == "!").unwrap();
+/// # }
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct CapturedSpan<'a> {
     inner: &'a CapturedSpanInner,

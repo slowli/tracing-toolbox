@@ -11,6 +11,8 @@ use crate::{Captured, CapturedSpan};
 
 /// Creates a predicate for the direct parent [`CapturedSpan`] of a span or a [`CapturedEvent`].
 ///
+/// [`CapturedEvent`]: crate::CapturedEvent
+///
 /// # Examples
 ///
 /// ```
@@ -39,6 +41,8 @@ where
 
 /// Predicate for the parent of a [`CapturedSpan`] or [`CapturedEvent`] returned
 /// by the [`parent()`] function.
+///
+/// [`CapturedEvent`]: crate::CapturedEvent
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParentPredicate<P> {
     matches: P,
@@ -86,6 +90,9 @@ where
 }
 
 /// Creates a predicate for ancestor [`CapturedSpan`]s of a span or a [`CapturedEvent`].
+/// The predicate is true iff the wrapped span predicate holds true for *any* of the ancestors.
+///
+/// [`CapturedEvent`]: crate::CapturedEvent
 ///
 /// # Examples
 ///
@@ -116,6 +123,8 @@ where
 
 /// Predicate for the ancestors of a [`CapturedSpan`] or [`CapturedEvent`] returned
 /// by the [`ancestor()`] function.
+///
+/// [`CapturedEvent`]: crate::CapturedEvent
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AncestorPredicate<P> {
     matches: P,
