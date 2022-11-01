@@ -304,8 +304,23 @@ fn capturing_wide_span_graph() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || graph(&mut 0, 0));
-
     let storage = storage.lock();
+
+    // Check that ordering of spans / events works as advertised.
+    let span_pairs = storage.all_spans().zip(storage.all_spans().skip(1));
+    for (prev, next) in span_pairs {
+        assert!(prev < next);
+    }
+    for span in storage.all_spans() {
+        for child in span.children() {
+            assert!(span < child);
+        }
+    }
+    let event_pairs = storage.all_events().zip(storage.all_events().skip(1));
+    for (prev, next) in event_pairs {
+        assert!(prev < next);
+    }
+
     assert_eq!(storage.root_spans().len(), 1);
     let root = storage.root_spans().next().unwrap();
     let counters: Vec<_> = root
@@ -324,4 +339,40 @@ fn capturing_wide_span_graph() {
         .filter_map(|span| span["counter"].as_uint())
         .collect();
     assert_eq!(ancestor_counters, [3, 2, 1, 0]);
+}
+
+#[test]
+fn items_from_different_storages_are_not_comparable() {
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::warn_span!("greeting").in_scope(|| {
+            tracing::info!("hello, world!");
+        });
+    });
+
+    let other_storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&other_storage));
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::warn_span!("greeting").in_scope(|| {
+            tracing::info!("hello, world!");
+        });
+    });
+
+    let storage = storage.lock();
+    let span = storage.root_spans().next().unwrap();
+    let event = storage.all_events().next().unwrap();
+    let other_storage = other_storage.lock();
+    let other_span = other_storage.root_spans().next().unwrap();
+    let other_event = other_storage.all_events().next().unwrap();
+
+    assert_eq!(span, span);
+    assert_eq!(storage.all_spans().next(), Some(span));
+    assert_ne!(span, other_span);
+    assert!(span.partial_cmp(&other_span).is_none());
+
+    assert_eq!(event, event);
+    assert_eq!(span.events().next(), Some(event));
+    assert_ne!(event, other_event);
+    assert!(event.partial_cmp(&other_event).is_none());
 }

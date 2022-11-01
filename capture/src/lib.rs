@@ -60,7 +60,7 @@
 
 use tracing_core::Metadata;
 
-use std::ops;
+use std::{cmp, ops, ptr};
 
 mod iter;
 mod layer;
@@ -81,6 +81,7 @@ mod sealed {
 struct CapturedEventInner {
     metadata: &'static Metadata<'static>,
     values: TracedValues<&'static str>,
+    id: CapturedEventId,
     parent_id: Option<CapturedSpanId>,
 }
 
@@ -88,6 +89,11 @@ type CapturedEventId = id_arena::Id<CapturedEventInner>;
 
 /// Captured tracing event containing a reference to its [`Metadata`] and values that the event
 /// was created with.
+///
+/// `CapturedEvent`s are comparable and are [partially ordered](PartialOrd) according
+/// to the capture order. Events are considered equal iff both are aliases of the same event;
+/// i.e., equality is reference-based rather than content-based.
+/// Two events from different [`Storage`]s are not ordered and are always non-equal.
 #[derive(Debug, Clone, Copy)]
 pub struct CapturedEvent<'a> {
     inner: &'a CapturedEventInner,
@@ -125,6 +131,24 @@ impl<'a> CapturedEvent<'a> {
     }
 }
 
+impl PartialEq for CapturedEvent<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.storage, other.storage) && self.inner.id == other.inner.id
+    }
+}
+
+impl Eq for CapturedEvent<'_> {}
+
+impl PartialOrd for CapturedEvent<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        if ptr::eq(self.storage, other.storage) {
+            Some(self.inner.id.cmp(&other.inner.id))
+        } else {
+            None
+        }
+    }
+}
+
 impl ops::Index<&str> for CapturedEvent<'_> {
     type Output = TracedValue;
 
@@ -151,6 +175,7 @@ struct CapturedSpanInner {
     metadata: &'static Metadata<'static>,
     values: TracedValues<&'static str>,
     stats: SpanStats,
+    id: CapturedSpanId,
     parent_id: Option<CapturedSpanId>,
     child_ids: Vec<CapturedSpanId>,
     event_ids: Vec<CapturedEventId>,
@@ -160,6 +185,11 @@ type CapturedSpanId = id_arena::Id<CapturedSpanInner>;
 
 /// Captured tracing span containing a reference to its [`Metadata`], values that the span
 /// was created with, [stats](SpanStats), and descendant [`CapturedEvent`]s.
+///
+/// `CapturedSpan`s are comparable and are [partially ordered](PartialOrd) according
+/// to the capture order. Spans are considered equal iff both are aliases of the same span;
+/// i.e., equality is reference-based rather than content-based.
+/// Two spans from different [`Storage`]s are not ordered and are always non-equal.
 #[derive(Debug, Clone, Copy)]
 pub struct CapturedSpan<'a> {
     inner: &'a CapturedSpanInner,
@@ -226,6 +256,24 @@ impl<'a> CapturedSpan<'a> {
     }
 }
 
+impl PartialEq for CapturedSpan<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.storage, other.storage) && self.inner.id == other.inner.id
+    }
+}
+
+impl Eq for CapturedSpan<'_> {}
+
+impl PartialOrd for CapturedSpan<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        if ptr::eq(self.storage, other.storage) {
+            Some(self.inner.id.cmp(&other.inner.id))
+        } else {
+            None
+        }
+    }
+}
+
 impl ops::Index<&str> for CapturedSpan<'_> {
     type Output = TracedValue;
 
@@ -237,7 +285,7 @@ impl ops::Index<&str> for CapturedSpan<'_> {
 
 /// Uniting trait for [`CapturedSpan`]s and [`CapturedEvent`]s that allows writing generic
 /// code in cases both should be supported.
-pub trait Captured<'a>: sealed::Sealed {
+pub trait Captured<'a>: Eq + PartialOrd + sealed::Sealed {
     /// Provides a reference to the span / event metadata.
     fn metadata(&self) -> &'static Metadata<'static>;
     /// Returns a value for the specified field, or `None` if the value is not defined.

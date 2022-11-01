@@ -86,10 +86,11 @@ impl Storage {
         values: TracedValues<&'static str>,
         parent_id: Option<CapturedSpanId>,
     ) -> CapturedSpanId {
-        let span_id = self.spans.alloc(CapturedSpanInner {
+        let span_id = self.spans.alloc_with_id(|id| CapturedSpanInner {
             metadata,
             values,
             stats: SpanStats::default(),
+            id,
             parent_id,
             child_ids: vec![],
             event_ids: vec![],
@@ -129,9 +130,10 @@ impl Storage {
         values: TracedValues<&'static str>,
         parent_id: Option<CapturedSpanId>,
     ) -> CapturedEventId {
-        let event_id = self.events.alloc(CapturedEventInner {
+        let event_id = self.events.alloc_with_id(|id| CapturedEventInner {
             metadata,
             values,
+            id,
             parent_id,
         });
         if let Some(parent_id) = parent_id {
