@@ -204,13 +204,13 @@ impl<P: Predicate<str>> PredicateReflection for MessagePredicate<P> {}
 
 impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for MessagePredicate<P> {
     fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
-        let message = variable.value("message").and_then(str_presentation);
-        message.map_or(false, |value| self.matches.eval(value))
+        variable
+            .message()
+            .map_or(false, |value| self.matches.eval(value))
     }
 
     fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
-        let message = variable.value("message").and_then(str_presentation);
-        let message = if let Some(message) = message {
+        let message = if let Some(message) = variable.message() {
             message
         } else {
             return if expected {
@@ -223,13 +223,5 @@ impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for MessagePredicate<P> {
 
         let child = self.matches.find_case(expected, message)?;
         Some(Case::new(Some(self), expected).add_child(child))
-    }
-}
-
-fn str_presentation(value: &TracedValue) -> Option<&str> {
-    match value {
-        TracedValue::String(str) => Some(str),
-        TracedValue::Object(object) => Some(object.as_ref()),
-        _ => None,
     }
 }

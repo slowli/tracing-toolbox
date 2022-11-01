@@ -162,10 +162,7 @@ fn assert_captured_spans(storage: &Storage) {
     for (i, event) in iter_events.enumerate() {
         assert_eq!(event.metadata().target(), "fib");
         assert_eq!(*event.metadata().level(), Level::DEBUG);
-        assert_eq!(
-            event["message"].as_debug_str(),
-            Some("performing iteration")
-        );
+        assert_eq!(event.message(), Some("performing iteration"));
         assert_eq!(event["i"], i as u64);
     }
     let return_event = fib_span.events().last().unwrap();
@@ -178,10 +175,7 @@ fn assert_captured_spans(storage: &Storage) {
     assert_eq!(outer_span.events().len(), 2);
     let warn_event = outer_span.events().next().unwrap();
     assert_eq!(*warn_event.metadata().level(), Level::WARN);
-    assert_eq!(
-        warn_event["message"].as_debug_str(),
-        Some("count looks somewhat large")
-    );
+    assert_eq!(warn_event.message(), Some("count looks somewhat large"));
 }
 
 #[test]

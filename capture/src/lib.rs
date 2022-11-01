@@ -37,7 +37,7 @@
 //! let event = span.events().next().unwrap();
 //! assert_eq!(*event.metadata().level(), Level::WARN);
 //! assert_eq!(
-//!     event["message"].as_debug_str(),
+//!     event.message(),
 //!     Some("I feel disturbance in the Force...")
 //! );
 //! ```
@@ -117,6 +117,17 @@ impl<'a> CapturedEvent<'a> {
             .values
             .iter()
             .find_map(|(s, value)| if *s == name { Some(value) } else { None })
+    }
+
+    /// Returns the message recorded in this event, i.e., the value of the `message` field
+    /// if it has a string presentation.
+    pub fn message(&self) -> Option<&'a str> {
+        self.value("message").and_then(|message| match message {
+            TracedValue::Object(obj) => Some(obj.as_ref()),
+            TracedValue::String(s) => Some(s),
+            TracedValue::Error(err) => Some(&err.message),
+            _ => None,
+        })
     }
 
     /// Returns the parent span for this event, or `None` if is not tied to a captured span.
