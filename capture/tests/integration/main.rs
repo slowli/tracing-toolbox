@@ -283,3 +283,35 @@ fn capturing_span_hierarchy() {
     let event_filter = field("value", 2_u64) & ancestor(field("value", 3_u64));
     storage.scan_events().single(&event_filter);
 }
+
+#[test]
+fn capturing_wide_span_graph() {
+    const MAX_DEPTH: usize = 3;
+
+    #[tracing::instrument(level = "debug")]
+    fn graph(counter: &mut u64, depth: usize) {
+        *counter += 1;
+        if depth == MAX_DEPTH {
+            tracing::debug!(depth, "reached max depth");
+        } else {
+            let children_count = if *counter % 2 == 0 { 2 } else { 3 };
+            for _ in 0..children_count {
+                graph(counter, depth + 1);
+            }
+        }
+    }
+
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || graph(&mut 0, 0));
+
+    let storage = storage.lock();
+    assert_eq!(storage.root_spans().len(), 1);
+    let root = storage.root_spans().next().unwrap();
+    let counters: Vec<_> = root
+        .descendants()
+        .filter_map(|span| span["counter"].as_uint())
+        .collect();
+    let max = counters.len() as u128;
+    assert!(counters.iter().copied().eq(1..=max), "{counters:?}");
+}

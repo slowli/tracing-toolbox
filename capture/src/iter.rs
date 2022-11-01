@@ -1,6 +1,6 @@
 use id_arena::{DefaultArenaBehavior, Id};
 
-use std::slice;
+use std::{slice};
 
 use crate::{CapturedEvent, CapturedEventInner, CapturedSpan, CapturedSpanInner, Storage};
 
@@ -160,6 +160,42 @@ impl ExactSizeIterator for CapturedEvents<'_> {
         match &self.ids_iter {
             IdsIter::Arena(arena) => arena.len(),
             IdsIter::Slice(slice) => slice.len(),
+        }
+    }
+}
+
+/// Depth-first iterator over [`CapturedSpan`]s returned by [`CapturedSpan::descendants()`].
+#[derive(Debug)]
+pub struct CapturedSpanDescendants<'a> {
+    storage: &'a Storage,
+    layers: Vec<&'a [Id<CapturedSpanInner>]>,
+}
+
+impl<'a> CapturedSpanDescendants<'a> {
+    pub(crate) fn new(root: &CapturedSpan<'a>) -> Self {
+        Self {
+            storage: root.storage,
+            layers: vec![&root.inner.child_ids],
+        }
+    }
+}
+
+impl<'a> Iterator for CapturedSpanDescendants<'a> {
+    type Item = CapturedSpan<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let last_layer = self.layers.last_mut()?;
+            if let Some((&head, tail)) = last_layer.split_first() {
+                let span = self.storage.span(head);
+                *last_layer = tail;
+                if !span.inner.child_ids.is_empty() {
+                    self.layers.push(&span.inner.child_ids);
+                }
+                break Some(span);
+            }
+            // The last layer is empty at this point.
+            self.layers.pop();
         }
     }
 }
