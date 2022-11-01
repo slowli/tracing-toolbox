@@ -12,7 +12,7 @@ use tracing_core::{
 };
 
 use super::*;
-use crate::{CapturedEvent, CapturedSpan, SpanStats};
+use crate::Storage;
 use tracing_tunnel::{TracedValue, TracedValues};
 
 static SITE: DefaultCallsite = DefaultCallsite::new(METADATA);
@@ -39,12 +39,9 @@ static EVENT_METADATA: &Metadata<'static> = &Metadata::new(
 
 #[test]
 fn level_predicates() {
-    let span = CapturedSpan {
-        metadata: METADATA,
-        values: TracedValues::new(),
-        stats: SpanStats::default(),
-        events: vec![],
-    };
+    let mut storage = Storage::new();
+    let span_id = storage.push_span(METADATA, TracedValues::new(), None);
+    let span = storage.span(span_id);
 
     let predicate = level(Level::INFO);
     assert!(predicate.eval(&span));
@@ -65,12 +62,9 @@ fn level_predicates() {
 
 #[test]
 fn target_predicates() {
-    let span = CapturedSpan {
-        metadata: METADATA,
-        values: TracedValues::new(),
-        stats: SpanStats::default(),
-        events: vec![],
-    };
+    let mut storage = Storage::new();
+    let span_id = storage.push_span(METADATA, TracedValues::new(), None);
+    let span = storage.span(span_id);
 
     let predicate = target("tracing_capture");
     assert!(predicate.eval(&span));
@@ -84,12 +78,9 @@ fn target_predicates() {
 
 #[test]
 fn name_predicates() {
-    let span = CapturedSpan {
-        metadata: METADATA,
-        values: TracedValues::new(),
-        stats: SpanStats::default(),
-        events: vec![],
-    };
+    let mut storage = Storage::new();
+    let span_id = storage.push_span(METADATA, TracedValues::new(), None);
+    let span = storage.span(span_id);
 
     let predicate = name(eq("test_span"));
     assert!(predicate.eval(&span));
@@ -101,17 +92,15 @@ fn name_predicates() {
 
 #[test]
 fn compound_predicates() {
+    let mut storage = Storage::new();
+    let span_id = storage.push_span(METADATA, TracedValues::new(), None);
+    let span = storage.span(span_id);
+
     let predicate = target("tracing_capture")
         & name(eq("test_span"))
         & level(Level::INFO)
         & field("val", 42_u64);
 
-    let mut span = CapturedSpan {
-        metadata: METADATA,
-        values: TracedValues::new(),
-        stats: SpanStats::default(),
-        events: vec![],
-    };
     assert!(!predicate.eval(&span));
     let case = predicate.find_case(false, &span).unwrap();
     let products: Vec<_> = collect_products(&case);
@@ -119,14 +108,16 @@ fn compound_predicates() {
     assert_eq!(products[0].name(), "fields.val");
     assert_eq!(products[0].value().to_string(), "None");
 
-    span.values = TracedValues::from_iter([("val", 23_u64.into())]);
+    storage.spans[span_id].values = TracedValues::from_iter([("val", 23_u64.into())]);
+    let span = storage.span(span_id);
     let case = predicate.find_case(false, &span).unwrap();
     let products = collect_products(&case);
     assert_eq!(products.len(), 1);
     assert_eq!(products[0].name(), "var");
     assert_eq!(products[0].value().to_string(), "UInt(23)");
 
-    span.values = TracedValues::from_iter([("val", 42_u64.into())]);
+    storage.spans[span_id].values = TracedValues::from_iter([("val", 42_u64.into())]);
+    let span = storage.span(span_id);
     let eval = predicate.eval(&span);
     assert!(eval);
 }
@@ -143,12 +134,10 @@ fn collect_products<'r>(case: &'r Case<'_>) -> Vec<&'r Product> {
 
 #[test]
 fn compound_predicates_combining_and_or() {
-    let span = CapturedSpan {
-        metadata: METADATA,
-        values: TracedValues::from_iter([("val", "str".into())]),
-        stats: SpanStats::default(),
-        events: vec![],
-    };
+    let mut storage = Storage::new();
+    let values = TracedValues::from_iter([("val", "str".into())]);
+    let span_id = storage.push_span(METADATA, values, None);
+    let span = storage.span(span_id);
 
     let predicate = (target("tracing_capture") | field("val", 23_u64)) & level(Level::INFO);
     assert!(predicate.eval(&span));
@@ -176,28 +165,31 @@ fn compound_predicates_combining_and_or() {
 
 #[test]
 fn message_predicates() {
-    let mut event = CapturedEvent {
-        metadata: EVENT_METADATA,
-        values: TracedValues::from_iter([
-            ("val", 42_i64.into()),
-            (
-                "message",
-                TracedValue::debug(&format_args!("completed computations")),
-            ),
-        ]),
-    };
+    let mut storage = Storage::new();
+    let values = TracedValues::from_iter([
+        ("val", 42_i64.into()),
+        (
+            "message",
+            TracedValue::debug(&format_args!("completed computations")),
+        ),
+    ]);
+    let event_id = storage.push_event(EVENT_METADATA, values, None);
+    let event = storage.event(event_id);
     let predicate = message(eq("completed computations"));
     assert!(predicate.eval(&event));
 
-    event.values.remove("message");
-    assert!(!predicate.eval(&event));
-    event.values.insert("message", 555_u64.into());
-    assert!(!predicate.eval(&event));
-    event
+    storage.events[event_id].values.remove("message");
+    assert!(!predicate.eval(&storage.event(event_id)));
+    storage.events[event_id]
+        .values
+        .insert("message", 555_u64.into());
+    assert!(!predicate.eval(&storage.event(event_id)));
+
+    storage.events[event_id]
         .values
         .insert("message", "completed computations".into());
+    let event = storage.event(event_id);
     assert!(predicate.eval(&event));
-
     let predicate =
         message(starts_with("completed")) & level(Level::DEBUG) & target("tracing_capture");
     assert!(predicate.eval(&event));
@@ -205,29 +197,28 @@ fn message_predicates() {
 
 #[test]
 fn using_extensions() {
-    let events = (0_i64..5).map(|val| CapturedEvent {
-        metadata: EVENT_METADATA,
-        values: TracedValues::from_iter([
+    let mut storage = Storage::new();
+    for val in 0_i64..5 {
+        let values = TracedValues::from_iter([
             ("val", val.into()),
             (
                 "message",
                 TracedValue::debug(&format_args!("completed computations")),
             ),
-        ]),
-    });
-    let events: Vec<_> = events.collect();
+        ]);
+        storage.push_event(EVENT_METADATA, values, None);
+    }
+    let scanner = storage.scan_events();
 
     let predicate =
         level(LevelFilter::DEBUG) & message(starts_with("completed")) & field("val", 1_i64);
-    let scanner = events.as_slice().scanner();
     let event = scanner.single(&predicate);
     assert_eq!(event["val"], 1_i64);
     let event = scanner.first(&field("val", [always()]));
     assert_eq!(event["val"], 0_i64);
-
-    let event = events.scanner().last(&predicate);
+    let event = scanner.last(&predicate);
     assert_eq!(event["val"], 1_i64);
 
-    events.scanner().all(&field("val", [always()]));
-    events.scanner().none(&level(LevelFilter::INFO));
+    scanner.all(&field("val", [always()]));
+    scanner.none(&level(LevelFilter::INFO));
 }

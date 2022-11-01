@@ -7,7 +7,7 @@ use predicates::{
 
 use std::fmt;
 
-use crate::{CapturedEvent, CapturedSpan};
+use crate::{Captured, CapturedEvent};
 use tracing_tunnel::TracedValue;
 
 /// Conversion into a predicate for a [`TracedValue`] used in the [`field()`] function.
@@ -55,12 +55,14 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 /// - Any `Predicate` for [`TracedValue`]. To bypass Rust orphaning rules, the predicate
 ///   must be enclosed in square brackets (i.e., a one-value array).
 ///
+/// [`CapturedSpan`]: crate::CapturedSpan
+///
 /// # Examples
 ///
 /// ```
 /// # use predicates::constant::always;
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{field, ScannerExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{field, ScanExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -71,7 +73,7 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.spans().scanner();
+/// let spans = storage.scan_spans();
 /// let _ = spans.single(&field("arg", [always()]));
 /// let _ = spans.single(&field("arg", 5_i64));
 /// ```
@@ -87,6 +89,8 @@ pub fn field<P: IntoFieldPredicate>(
 
 /// Predicate for a particular field of a [`CapturedSpan`] or [`CapturedEvent`] returned by
 /// the [`field()`] function.
+///
+/// [`CapturedSpan`]: crate::CapturedSpan
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FieldPredicate<P> {
     name: &'static str,
@@ -103,36 +107,29 @@ impl<P: Predicate<TracedValue>> fmt::Display for FieldPredicate<P> {
 
 impl<P: Predicate<TracedValue>> PredicateReflection for FieldPredicate<P> {}
 
-macro_rules! impl_predicate_for_field {
-    ($ty:ty) => {
-        impl<P: Predicate<TracedValue>> Predicate<$ty> for FieldPredicate<P> {
-            fn eval(&self, variable: &$ty) -> bool {
-                variable
-                    .value(self.name)
-                    .map_or(false, |value| self.matches.eval(value))
-            }
+impl<'a, P: Predicate<TracedValue>, T: Captured<'a>> Predicate<T> for FieldPredicate<P> {
+    fn eval(&self, variable: &T) -> bool {
+        variable
+            .value(self.name)
+            .map_or(false, |value| self.matches.eval(value))
+    }
 
-            fn find_case(&self, expected: bool, variable: &$ty) -> Option<Case<'_>> {
-                let value = if let Some(value) = variable.value(self.name) {
-                    value
-                } else {
-                    return if expected {
-                        None // was expecting a variable, but there is none
-                    } else {
-                        let product = Product::new(format!("fields.{}", self.name), "None");
-                        Some(Case::new(Some(self), expected).add_product(product))
-                    };
-                };
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
+        let value = if let Some(value) = variable.value(self.name) {
+            value
+        } else {
+            return if expected {
+                None // was expecting a variable, but there is none
+            } else {
+                let product = Product::new(format!("fields.{}", self.name), "None");
+                Some(Case::new(Some(self), expected).add_product(product))
+            };
+        };
 
-                let child = self.matches.find_case(expected, value)?;
-                Some(Case::new(Some(self), expected).add_child(child))
-            }
-        }
-    };
+        let child = self.matches.find_case(expected, value)?;
+        Some(Case::new(Some(self), expected).add_child(child))
+    }
 }
-
-impl_predicate_for_field!(CapturedSpan);
-impl_predicate_for_field!(CapturedEvent);
 
 #[doc(hidden)] // implementation detail (yet?)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,7 +171,7 @@ impl<V: fmt::Debug + PartialEq<TracedValue>> Predicate<TracedValue> for EquivPre
 /// ```
 /// # use predicates::{ord::eq, str::contains};
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{message, ScannerExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{message, ScanExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -185,9 +182,8 @@ impl<V: fmt::Debug + PartialEq<TracedValue>> Predicate<TracedValue> for EquivPre
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured event.
-/// let events = storage.all_events().scanner();
+/// let events = storage.scan_events();
 /// let _ = events.single(&message(eq("computations completed")));
-/// let events = storage.all_events().scanner();
 /// let _ = events.single(&message(contains("completed")));
 /// ```
 pub fn message<P: Predicate<str>>(matches: P) -> MessagePredicate<P> {
@@ -210,15 +206,15 @@ impl<P: Predicate<str>> fmt::Display for MessagePredicate<P> {
 
 impl<P: Predicate<str>> PredicateReflection for MessagePredicate<P> {}
 
-impl<P: Predicate<str>> Predicate<CapturedEvent> for MessagePredicate<P> {
-    fn eval(&self, variable: &CapturedEvent) -> bool {
-        let message = variable.value("message").and_then(str_presentation);
-        message.map_or(false, |value| self.matches.eval(value))
+impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for MessagePredicate<P> {
+    fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
+        variable
+            .message()
+            .map_or(false, |value| self.matches.eval(value))
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedEvent) -> Option<Case<'_>> {
-        let message = variable.value("message").and_then(str_presentation);
-        let message = if let Some(message) = message {
+    fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
+        let message = if let Some(message) = variable.message() {
             message
         } else {
             return if expected {
@@ -231,13 +227,5 @@ impl<P: Predicate<str>> Predicate<CapturedEvent> for MessagePredicate<P> {
 
         let child = self.matches.find_case(expected, message)?;
         Some(Case::new(Some(self), expected).add_child(child))
-    }
-}
-
-fn str_presentation(value: &TracedValue) -> Option<&str> {
-    match value {
-        TracedValue::String(str) => Some(str),
-        TracedValue::Object(object) => Some(object.as_ref()),
-        _ => None,
     }
 }

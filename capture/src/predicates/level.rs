@@ -8,7 +8,7 @@ use tracing_core::{Level, LevelFilter};
 
 use std::fmt;
 
-use crate::{CapturedEvent, CapturedSpan};
+use crate::Captured;
 
 /// Conversion into a predicate for [`Level`]s used in the [`level()`] function.
 pub trait IntoLevelPredicate {
@@ -55,13 +55,16 @@ impl IntoLevelPredicate for LevelFilter {
 /// - Any `Predicate` for [`Level`]. To bypass Rust orphaning rules, the predicate
 ///   must be enclosed in square brackets (i.e., a one-value array).
 ///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
+///
 /// # Examples
 ///
 /// ```
 /// # use predicates::ord::gt;
 /// # use tracing_core::{Level, LevelFilter};
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{level, ScannerExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{level, ScanExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -72,7 +75,7 @@ impl IntoLevelPredicate for LevelFilter {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.spans().scanner();
+/// let spans = storage.scan_spans();
 /// let _ = spans.single(&level(Level::INFO));
 /// let _ = spans.first(&level(LevelFilter::DEBUG));
 /// let _ = spans.last(&level([gt(Level::WARN)]));
@@ -85,6 +88,9 @@ pub fn level<P: IntoLevelPredicate>(matches: P) -> LevelPredicate<P::Predicate> 
 
 /// Predicate for the [`Level`] of a [`CapturedSpan`] or [`CapturedEvent`] returned by
 /// the [`level()`] function.
+///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LevelPredicate<P> {
     matches: P,
@@ -100,25 +106,12 @@ impl<P: Predicate<Level>> fmt::Display for LevelPredicate<P> {
 
 impl<P: Predicate<Level>> PredicateReflection for LevelPredicate<P> {}
 
-impl<P: Predicate<Level>> Predicate<CapturedSpan> for LevelPredicate<P> {
-    fn eval(&self, variable: &CapturedSpan) -> bool {
+impl<'a, P: Predicate<Level>, T: Captured<'a>> Predicate<T> for LevelPredicate<P> {
+    fn eval(&self, variable: &T) -> bool {
         self.matches.eval(variable.metadata().level())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedSpan) -> Option<Case<'_>> {
-        let child = self
-            .matches
-            .find_case(expected, variable.metadata().level())?;
-        Some(Case::new(Some(self), expected).add_child(child))
-    }
-}
-
-impl<P: Predicate<Level>> Predicate<CapturedEvent> for LevelPredicate<P> {
-    fn eval(&self, variable: &CapturedEvent) -> bool {
-        self.matches.eval(variable.metadata().level())
-    }
-
-    fn find_case(&self, expected: bool, variable: &CapturedEvent) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().level())?;

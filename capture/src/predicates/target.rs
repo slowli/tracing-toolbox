@@ -7,7 +7,7 @@ use predicates::{
 
 use std::fmt;
 
-use crate::{CapturedEvent, CapturedSpan};
+use crate::Captured;
 
 /// Conversion into a predicate for the target used in the [`target()`] function.
 pub trait IntoTargetPredicate {
@@ -77,12 +77,15 @@ impl Predicate<str> for TargetStrPredicate<'_> {
 /// - Any `str` `Predicate`. To bypass Rust orphaning rules, the predicate
 ///   must be enclosed in square brackets (i.e., a one-value array).
 ///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
+///
 /// # Examples
 ///
 /// ```
 /// # use predicates::str::starts_with;
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{target, ScannerExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{target, ScanExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -93,7 +96,7 @@ impl Predicate<str> for TargetStrPredicate<'_> {
 ///
 /// let storage = storage.lock();
 /// // All of these access the single captured span.
-/// let spans = storage.spans().scanner();
+/// let spans = storage.scan_spans();
 /// let _ = spans.single(&target("capture"));
 /// let _ = spans.single(&target([starts_with("cap")]));
 /// ```
@@ -105,6 +108,9 @@ pub fn target<P: IntoTargetPredicate>(matches: P) -> TargetPredicate<P::Predicat
 
 /// Predicate for the target of a [`CapturedSpan`] or [`CapturedEvent`] returned by
 /// the [`target()`] function.
+///
+/// [`CapturedSpan`]: crate::CapturedSpan
+/// [`CapturedEvent`]: crate::CapturedEvent
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TargetPredicate<P> {
     matches: P,
@@ -120,25 +126,12 @@ impl<P: Predicate<str>> fmt::Display for TargetPredicate<P> {
 
 impl<P: Predicate<str>> PredicateReflection for TargetPredicate<P> {}
 
-impl<P: Predicate<str>> Predicate<CapturedSpan> for TargetPredicate<P> {
-    fn eval(&self, variable: &CapturedSpan) -> bool {
+impl<'a, P: Predicate<str>, T: Captured<'a>> Predicate<T> for TargetPredicate<P> {
+    fn eval(&self, variable: &T) -> bool {
         self.matches.eval(variable.metadata().target())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedSpan) -> Option<Case<'_>> {
-        let child = self
-            .matches
-            .find_case(expected, variable.metadata().target())?;
-        Some(Case::new(Some(self), expected).add_child(child))
-    }
-}
-
-impl<P: Predicate<str>> Predicate<CapturedEvent> for TargetPredicate<P> {
-    fn eval(&self, variable: &CapturedEvent) -> bool {
-        self.matches.eval(variable.metadata().target())
-    }
-
-    fn find_case(&self, expected: bool, variable: &CapturedEvent) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().target())?;

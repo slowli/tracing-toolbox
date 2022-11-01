@@ -9,9 +9,11 @@
 //! - [`target()`] checks the span / event target
 //! - [`field()`] checks a specific span / event field
 //! - [`message()`] checks the event message
+//! - [`parent()`] checks the direct parent span of an event / span
+//! - [`ancestor()`] checks the ancestor spans of an event / span
 //!
 //! These predicates can be combined with bitwise operators, `&` and `|`.
-//! The [`ScannerExt`] trait may be used to simplify assertions with predicates. The remaining
+//! The [`ScanExt`] trait may be used to simplify assertions with predicates. The remaining
 //! traits and structs are lower-level plumbing and rarely need to be used directly.
 //!
 //! [`CapturedSpan`]: crate::CapturedSpan
@@ -32,14 +34,11 @@
 //! // The resulting predicate can be used with `CapturedExt` trait.
 //! let storage: &Storage = // ...
 //! #   storage;
-//! let _ = storage.spans().scanner().first(&predicate);
-//! let _ = storage.all_events().scanner().single(&level(Level::ERROR));
+//! let _ = storage.scan_spans().first(&predicate);
+//! let _ = storage.scan_events().single(&level(Level::ERROR));
 //!
 //! // ...or converted back to a closure:
-//! let predicate = into_fn(predicate);
-//! let _ = storage.spans().iter().filter(|&span| predicate(span));
-//! // ^ Unfortunately, `filter()` creates a double reference, thus,
-//! // `filter(predicate)` doesn't work.
+//! let _ = storage.all_spans().filter(into_fn(predicate));
 //! # }
 //! ```
 
@@ -51,6 +50,7 @@ mod ext;
 mod field;
 mod level;
 mod name;
+mod parent;
 mod target;
 
 #[cfg(test)]
@@ -58,10 +58,11 @@ mod tests;
 
 pub use self::{
     combinators::{And, Or},
-    ext::{Scanner, ScannerExt},
+    ext::{ScanExt, Scanner},
     field::{field, message, FieldPredicate, IntoFieldPredicate, MessagePredicate},
     level::{level, IntoLevelPredicate, LevelPredicate},
     name::{name, NamePredicate},
+    parent::{ancestor, parent, AncestorPredicate, ParentPredicate},
     target::{target, IntoTargetPredicate, TargetPredicate},
 };
 
@@ -78,7 +79,7 @@ pub use self::{
 /// let predicate = into_fn(target("tracing") & level(Level::INFO));
 /// let events: &[CapturedEvent] = // ...
 /// #   &[];
-/// let matching_events = events.iter().filter(|&evt| predicate(evt));
+/// let matching_events = events.iter().copied().filter(predicate);
 /// // Do something with `matching_events`...
 /// ```
 pub fn into_fn<Item>(predicate: impl Predicate<Item>) -> impl Fn(&Item) -> bool {

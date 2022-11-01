@@ -49,8 +49,8 @@ tracing::subscriber::with_default(subscriber, || {
 
 // Inspect the only captured span.
 let storage = storage.lock();
-assert_eq!(storage.spans().len(), 1);
-let span = &storage.spans()[0];
+assert_eq!(storage.all_spans().len(), 1);
+let span = storage.all_spans().next().unwrap();
 assert_eq!(span["num"], 42_i64);
 assert_eq!(span.stats().entered, 1);
 assert!(span.stats().is_closed);
@@ -77,16 +77,16 @@ let predicate = level(Level::WARN)
     & message(contains("compute"))
     & field("result", 42_i64);
 // Checks that there is a single event satisfying `predicate`.
-storage.all_events().scanner().single(&predicate);
+storage.scan_events().single(&predicate);
 // ...and that none of spans satisfy similar predicate.
-storage.spans().scanner().none(&level(Level::WARN));
+storage.scan_spans().none(&level(Level::WARN));
 ```
 
 ## Alternatives / similar tools
 
-[`tracing-test`] is a lower-level alternative. [`tracing-fluent-assertions`] is more
-similar in intended goals, but differs significantly in API design; the assertions
-need to be declared before the capture.
+- [`tracing-test`] is a lower-level alternative.
+- [`tracing-fluent-assertions`] is more similar in intended goals, but differs significantly
+  in API design; the assertions need to be declared before the capture.
 
 ## License
 
