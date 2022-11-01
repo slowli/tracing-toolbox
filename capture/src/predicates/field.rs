@@ -7,7 +7,7 @@ use predicates::{
 
 use std::fmt;
 
-use crate::{CapturedEvent, CapturedSpan};
+use crate::{Captured, CapturedEvent};
 use tracing_tunnel::TracedValue;
 
 /// Conversion into a predicate for a [`TracedValue`] used in the [`field()`] function.
@@ -103,36 +103,29 @@ impl<P: Predicate<TracedValue>> fmt::Display for FieldPredicate<P> {
 
 impl<P: Predicate<TracedValue>> PredicateReflection for FieldPredicate<P> {}
 
-macro_rules! impl_predicate_for_field {
-    ($ty:ty) => {
-        impl<P: Predicate<TracedValue>> Predicate<$ty> for FieldPredicate<P> {
-            fn eval(&self, variable: &$ty) -> bool {
-                variable
-                    .value(self.name)
-                    .map_or(false, |value| self.matches.eval(value))
-            }
+impl<'a, P: Predicate<TracedValue>, T: Captured<'a>> Predicate<T> for FieldPredicate<P> {
+    fn eval(&self, variable: &T) -> bool {
+        variable
+            .value(self.name)
+            .map_or(false, |value| self.matches.eval(value))
+    }
 
-            fn find_case(&self, expected: bool, variable: &$ty) -> Option<Case<'_>> {
-                let value = if let Some(value) = variable.value(self.name) {
-                    value
-                } else {
-                    return if expected {
-                        None // was expecting a variable, but there is none
-                    } else {
-                        let product = Product::new(format!("fields.{}", self.name), "None");
-                        Some(Case::new(Some(self), expected).add_product(product))
-                    };
-                };
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
+        let value = if let Some(value) = variable.value(self.name) {
+            value
+        } else {
+            return if expected {
+                None // was expecting a variable, but there is none
+            } else {
+                let product = Product::new(format!("fields.{}", self.name), "None");
+                Some(Case::new(Some(self), expected).add_product(product))
+            };
+        };
 
-                let child = self.matches.find_case(expected, value)?;
-                Some(Case::new(Some(self), expected).add_child(child))
-            }
-        }
-    };
+        let child = self.matches.find_case(expected, value)?;
+        Some(Case::new(Some(self), expected).add_child(child))
+    }
 }
-
-impl_predicate_for_field!(CapturedSpan<'_>);
-impl_predicate_for_field!(CapturedEvent<'_>);
 
 #[doc(hidden)] // implementation detail (yet?)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

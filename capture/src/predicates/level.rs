@@ -8,7 +8,7 @@ use tracing_core::{Level, LevelFilter};
 
 use std::fmt;
 
-use crate::{CapturedEvent, CapturedSpan};
+use crate::Captured;
 
 /// Conversion into a predicate for [`Level`]s used in the [`level()`] function.
 pub trait IntoLevelPredicate {
@@ -100,25 +100,12 @@ impl<P: Predicate<Level>> fmt::Display for LevelPredicate<P> {
 
 impl<P: Predicate<Level>> PredicateReflection for LevelPredicate<P> {}
 
-impl<P: Predicate<Level>> Predicate<CapturedSpan<'_>> for LevelPredicate<P> {
-    fn eval(&self, variable: &CapturedSpan<'_>) -> bool {
+impl<'a, P: Predicate<Level>, T: Captured<'a>> Predicate<T> for LevelPredicate<P> {
+    fn eval(&self, variable: &T) -> bool {
         self.matches.eval(variable.metadata().level())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedSpan<'_>) -> Option<Case<'_>> {
-        let child = self
-            .matches
-            .find_case(expected, variable.metadata().level())?;
-        Some(Case::new(Some(self), expected).add_child(child))
-    }
-}
-
-impl<P: Predicate<Level>> Predicate<CapturedEvent<'_>> for LevelPredicate<P> {
-    fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
-        self.matches.eval(variable.metadata().level())
-    }
-
-    fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().level())?;

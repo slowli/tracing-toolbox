@@ -5,9 +5,9 @@ use predicates::{
     Predicate,
 };
 
-use std::fmt;
+use std::{fmt, iter};
 
-use crate::{CapturedEvent, CapturedSpan};
+use crate::{Captured, CapturedSpan};
 
 /// Creates a predicate for the direct parent [`CapturedSpan`] of a span or a [`CapturedEvent`].
 ///
@@ -57,39 +57,33 @@ where
 
 impl<P> PredicateReflection for ParentPredicate<P> where P: for<'a> Predicate<CapturedSpan<'a>> {}
 
-macro_rules! impl_parent_predicate {
-    ($target:ty) => {
-        impl<P> Predicate<$target> for ParentPredicate<P>
-        where
-            P: for<'a> Predicate<CapturedSpan<'a>>,
-        {
-            fn eval(&self, variable: &$target) -> bool {
-                let parent = variable.parent();
-                parent.map_or(false, |parent| self.matches.eval(&parent))
-            }
+impl<'a, P, T> Predicate<T> for ParentPredicate<P>
+where
+    T: Captured<'a>,
+    P: for<'p> Predicate<CapturedSpan<'p>>,
+{
+    fn eval(&self, variable: &T) -> bool {
+        let parent = variable.parent();
+        parent.map_or(false, |parent| self.matches.eval(&parent))
+    }
 
-            fn find_case(&self, expected: bool, variable: &$target) -> Option<Case<'_>> {
-                let parent = variable.parent();
-                let parent = if let Some(parent) = parent {
-                    parent
-                } else {
-                    return if expected {
-                        None // was expecting a parent, but there is none
-                    } else {
-                        let product = Product::new("parent", "None");
-                        Some(Case::new(Some(self), expected).add_product(product))
-                    };
-                };
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
+        let parent = variable.parent();
+        let parent = if let Some(parent) = parent {
+            parent
+        } else {
+            return if expected {
+                None // was expecting a parent, but there is none
+            } else {
+                let product = Product::new("parent", "None");
+                Some(Case::new(Some(self), expected).add_product(product))
+            };
+        };
 
-                let child = self.matches.find_case(expected, &parent)?;
-                Some(Case::new(Some(self), expected).add_child(child))
-            }
-        }
-    };
+        let child = self.matches.find_case(expected, &parent)?;
+        Some(Case::new(Some(self), expected).add_child(child))
+    }
 }
-
-impl_parent_predicate!(CapturedSpan<'_>);
-impl_parent_predicate!(CapturedEvent<'_>);
 
 /// Creates a predicate for ancestor [`CapturedSpan`]s of a span or a [`CapturedEvent`].
 ///
@@ -140,25 +134,26 @@ where
 
 impl<P> PredicateReflection for AncestorPredicate<P> where P: for<'a> Predicate<CapturedSpan<'a>> {}
 
-impl<P> Predicate<CapturedEvent<'_>> for AncestorPredicate<P>
+impl<'a, P, T> Predicate<T> for AncestorPredicate<P>
 where
-    P: for<'a> Predicate<CapturedSpan<'a>>,
+    T: Captured<'a>,
+    P: for<'p> Predicate<CapturedSpan<'p>>,
 {
-    fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
-        variable.ancestors().any(|span| self.matches.eval(&span))
+    fn eval(&self, variable: &T) -> bool {
+        let mut ancestors = iter::successors(variable.parent(), CapturedSpan::parent);
+        ancestors.any(|span| self.matches.eval(&span))
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
+        let mut ancestors = iter::successors(variable.parent(), CapturedSpan::parent);
         if expected {
             // Return the first of ancestor cases.
-            let child = variable
-                .ancestors()
-                .find_map(|span| self.matches.find_case(expected, &span))?;
+            let child = ancestors.find_map(|span| self.matches.find_case(expected, &span))?;
             Some(Case::new(Some(self), expected).add_child(child))
         } else {
             // Need all ancestor cases.
             let case = Case::new(Some(self), expected);
-            variable.ancestors().try_fold(case, |case, span| {
+            ancestors.try_fold(case, |case, span| {
                 let child = self.matches.find_case(expected, &span)?;
                 Some(case.add_child(child))
             })

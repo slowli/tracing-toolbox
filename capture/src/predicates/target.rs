@@ -7,7 +7,7 @@ use predicates::{
 
 use std::fmt;
 
-use crate::{CapturedEvent, CapturedSpan};
+use crate::Captured;
 
 /// Conversion into a predicate for the target used in the [`target()`] function.
 pub trait IntoTargetPredicate {
@@ -120,25 +120,12 @@ impl<P: Predicate<str>> fmt::Display for TargetPredicate<P> {
 
 impl<P: Predicate<str>> PredicateReflection for TargetPredicate<P> {}
 
-impl<P: Predicate<str>> Predicate<CapturedSpan<'_>> for TargetPredicate<P> {
-    fn eval(&self, variable: &CapturedSpan<'_>) -> bool {
+impl<'a, P: Predicate<str>, T: Captured<'a>> Predicate<T> for TargetPredicate<P> {
+    fn eval(&self, variable: &T) -> bool {
         self.matches.eval(variable.metadata().target())
     }
 
-    fn find_case(&self, expected: bool, variable: &CapturedSpan<'_>) -> Option<Case<'_>> {
-        let child = self
-            .matches
-            .find_case(expected, variable.metadata().target())?;
-        Some(Case::new(Some(self), expected).add_child(child))
-    }
-}
-
-impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for TargetPredicate<P> {
-    fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
-        self.matches.eval(variable.metadata().target())
-    }
-
-    fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
+    fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
         let child = self
             .matches
             .find_case(expected, variable.metadata().target())?;

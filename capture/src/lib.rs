@@ -67,11 +67,15 @@ mod layer;
 pub mod predicates;
 
 pub use crate::{
-    iter::{CapturedEvents, CapturedSpans, CapturedSpanDescendants},
+    iter::{CapturedEvents, CapturedSpanDescendants, CapturedSpans},
     layer::{CaptureLayer, SharedStorage, Storage},
 };
 
 use tracing_tunnel::{TracedValue, TracedValues};
+
+mod sealed {
+    pub trait Sealed {}
+}
 
 #[derive(Debug)]
 struct CapturedEventInner {
@@ -102,7 +106,7 @@ impl<'a> CapturedEvent<'a> {
     }
 
     /// Returns a value for the specified field, or `None` if the value is not defined.
-    pub fn value(&self, name: &str) -> Option<&TracedValue> {
+    pub fn value(&self, name: &str) -> Option<&'a TracedValue> {
         self.inner
             .values
             .iter()
@@ -174,7 +178,7 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Returns a value for the specified field, or `None` if the value is not defined.
-    pub fn value(&self, name: &str) -> Option<&TracedValue> {
+    pub fn value(&self, name: &str) -> Option<&'a TracedValue> {
         self.inner
             .values
             .iter()
@@ -222,6 +226,55 @@ impl ops::Index<&str> for CapturedSpan<'_> {
     fn index(&self, index: &str) -> &Self::Output {
         self.value(index)
             .unwrap_or_else(|| panic!("field `{index}` is not contained in span"))
+    }
+}
+
+/// Uniting trait for [`CapturedSpan`]s and [`CapturedEvent`]s that allows writing generic
+/// code in cases both should be supported.
+pub trait Captured<'a>: sealed::Sealed {
+    /// Provides a reference to the span / event metadata.
+    fn metadata(&self) -> &'static Metadata<'static>;
+    /// Returns a value for the specified field, or `None` if the value is not defined.
+    fn value(&self, name: &str) -> Option<&'a TracedValue>;
+    /// Returns the reference to the parent span, if any.
+    fn parent(&self) -> Option<CapturedSpan<'a>>;
+}
+
+impl sealed::Sealed for CapturedSpan<'_> {}
+
+impl<'a> Captured<'a> for CapturedSpan<'a> {
+    #[inline]
+    fn metadata(&self) -> &'static Metadata<'static> {
+        self.metadata()
+    }
+
+    #[inline]
+    fn value(&self, name: &str) -> Option<&'a TracedValue> {
+        self.value(name)
+    }
+
+    #[inline]
+    fn parent(&self) -> Option<CapturedSpan<'a>> {
+        self.parent()
+    }
+}
+
+impl sealed::Sealed for CapturedEvent<'_> {}
+
+impl<'a> Captured<'a> for CapturedEvent<'a> {
+    #[inline]
+    fn metadata(&self) -> &'static Metadata<'static> {
+        self.metadata()
+    }
+
+    #[inline]
+    fn value(&self, name: &str) -> Option<&'a TracedValue> {
+        self.value(name)
+    }
+
+    #[inline]
+    fn parent(&self) -> Option<CapturedSpan<'a>> {
+        self.parent()
     }
 }
 

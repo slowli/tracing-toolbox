@@ -1,6 +1,6 @@
 use id_arena::{DefaultArenaBehavior, Id};
 
-use std::{slice};
+use std::slice;
 
 use crate::{CapturedEvent, CapturedEventInner, CapturedSpan, CapturedSpanInner, Storage};
 
