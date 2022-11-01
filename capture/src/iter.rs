@@ -1,6 +1,6 @@
 use id_arena::{DefaultArenaBehavior, Id};
 
-use std::slice;
+use std::{iter::FlatMap, slice};
 
 use crate::{CapturedEvent, CapturedEventInner, CapturedSpan, CapturedSpanInner, Storage};
 
@@ -197,5 +197,36 @@ impl<'a> Iterator for CapturedSpanDescendants<'a> {
             // The last layer is empty at this point.
             self.layers.pop();
         }
+    }
+}
+
+/// Iterator over the descendant [events](CapturedEvent) of a [`CapturedSpan`] returned
+/// from [`descendant_events()`](CapturedSpan::descendant_events()).
+#[derive(Debug)]
+pub struct DescendantEvents<'a> {
+    inner: FlatMap<
+        CapturedSpanDescendants<'a>,
+        CapturedEvents<'a>,
+        fn(CapturedSpan<'a>) -> CapturedEvents<'a>,
+    >,
+}
+
+impl<'a> DescendantEvents<'a> {
+    pub(crate) fn new(root: &CapturedSpan<'a>) -> Self {
+        Self {
+            inner: root.descendants().flat_map(|span| span.events()),
+        }
+    }
+}
+
+impl<'a> Iterator for DescendantEvents<'a> {
+    type Item = CapturedEvent<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
     }
 }

@@ -314,4 +314,14 @@ fn capturing_wide_span_graph() {
         .collect();
     let max = counters.len() as u128;
     assert!(counters.iter().copied().eq(1..=max), "{counters:?}");
+
+    let predicate = level(Level::DEBUG) & field("counter", 10_u64);
+    root.deep_scan_spans().single(&predicate);
+    let predicate = field("depth", 3_u64) & message(eq("reached max depth"));
+    let event = root.deep_scan_events().first(&predicate);
+    let ancestor_counters: Vec<_> = event
+        .ancestors()
+        .filter_map(|span| span["counter"].as_uint())
+        .collect();
+    assert_eq!(ancestor_counters, [3, 2, 1, 0]);
 }

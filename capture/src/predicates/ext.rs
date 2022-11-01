@@ -4,7 +4,9 @@ use predicates::Predicate;
 
 use std::fmt;
 
-use crate::{CapturedEvents, CapturedSpan, CapturedSpans, Storage};
+use crate::{
+    CapturedEvents, CapturedSpan, CapturedSpanDescendants, CapturedSpans, DescendantEvents, Storage,
+};
 
 /// Helper to wrap holders of [`CapturedSpan`]s or [`CapturedEvent`]s
 /// (spans or the underlying [`Storage`]) so that they are more convenient to use with `Predicate`s.
@@ -35,7 +37,6 @@ impl<'a> ScanExt<'a> for &'a Storage {
 }
 
 /// Scans for `CapturedSpan` are shallow, i.e. include only direct children spans / events.
-// TODO: implement and use deep scan?
 impl<'a> ScanExt<'a> for CapturedSpan<'a> {
     fn scan_spans(self) -> Scanner<Self, CapturedSpans<'a>> {
         Scanner::new(self, |span| span.children())
@@ -43,6 +44,18 @@ impl<'a> ScanExt<'a> for CapturedSpan<'a> {
 
     fn scan_events(self) -> Scanner<Self, CapturedEvents<'a>> {
         Scanner::new(self, |span| span.events())
+    }
+}
+
+impl<'a> CapturedSpan<'a> {
+    /// Deeply scans all descendants of this span.
+    pub fn deep_scan_spans(self) -> Scanner<Self, CapturedSpanDescendants<'a>> {
+        Scanner::new(self, |span| span.descendants())
+    }
+
+    /// Deeply scans all descendant events of this span.
+    pub fn deep_scan_events(self) -> Scanner<Self, DescendantEvents<'a>> {
+        Scanner::new(self, |span| span.descendant_events())
     }
 }
 
@@ -69,7 +82,7 @@ impl<T: Copy, I> Copy for Scanner<T, I> {}
 
 impl<T, I> Scanner<T, I>
 where
-    I: DoubleEndedIterator,
+    I: Iterator,
     I::Item: fmt::Debug,
 {
     fn new(items: T, into_iter: fn(T) -> I) -> Self {
@@ -135,7 +148,13 @@ where
             panic!("item matched predicate {predicate}: {item:#?}");
         }
     }
+}
 
+impl<T, I> Scanner<T, I>
+where
+    I: DoubleEndedIterator,
+    I::Item: fmt::Debug,
+{
     /// Finds the last item matching the predicate.
     ///
     /// # Panics
