@@ -20,7 +20,7 @@ use crate::{
     CapturedEvent, CapturedEventId, CapturedEventInner, CapturedEvents, CapturedSpan,
     CapturedSpanId, CapturedSpanInner, CapturedSpans, SpanStats,
 };
-use tracing_tunnel::{TracedValues, ValueVisitor};
+use tracing_tunnel::{TracedValueVisitor, TracedValues};
 
 /// Storage of captured tracing information.
 ///
@@ -250,7 +250,7 @@ where
         } else {
             None
         };
-        let mut visitor = ValueVisitor::default();
+        let mut visitor = TracedValueVisitor::default();
         attrs.record(&mut visitor);
         let arena_id = self
             .lock()
@@ -261,7 +261,7 @@ where
     fn on_record(&self, id: &Id, values: &Record<'_>, ctx: Context<'_, S>) {
         let span = ctx.span(id).unwrap();
         if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
-            let mut visitor = ValueVisitor::default();
+            let mut visitor = TracedValueVisitor::default();
             values.record(&mut visitor);
             self.lock().on_record(id, visitor.values);
         };
@@ -277,7 +277,7 @@ where
         } else {
             None
         };
-        let mut visitor = ValueVisitor::default();
+        let mut visitor = TracedValueVisitor::default();
         event.record(&mut visitor);
         self.lock()
             .push_event(event.metadata(), visitor.values, parent_id);

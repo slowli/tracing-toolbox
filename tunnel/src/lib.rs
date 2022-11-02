@@ -147,6 +147,7 @@ mod receiver;
 #[cfg_attr(docsrs, doc(cfg(feature = "sender")))]
 mod sender;
 mod types;
+mod value;
 
 #[cfg(feature = "receiver")]
 pub use crate::receiver::{
@@ -154,9 +155,12 @@ pub use crate::receiver::{
 };
 #[cfg(feature = "sender")]
 pub use crate::sender::TracingEventSender;
-pub use crate::types::{
-    CallSiteData, CallSiteKind, DebugObject, MetadataId, RawSpanId, TracedError, TracedValue,
-    TracedValues, TracingEvent, TracingLevel, ValueVisitor, FromTracedValue,
+pub use crate::{
+    types::{
+        CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracedValueVisitor, TracedValues,
+        TracingEvent, TracingLevel,
+    },
+    value::{DebugObject, FromTracedValue, TracedError, TracedValue},
 };
 
 #[cfg(doctest)]
