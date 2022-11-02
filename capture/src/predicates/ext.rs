@@ -5,7 +5,7 @@ use predicates::Predicate;
 use std::fmt;
 
 use crate::{
-    CapturedEvents, CapturedSpan, CapturedSpanDescendants, CapturedSpans, DescendantEvents, Storage,
+    CapturedEvents, CapturedSpan, CapturedSpans, DescendantEvents, DescendantSpans, Storage,
 };
 
 /// Helper to wrap holders of [`CapturedSpan`]s or [`CapturedEvent`]s
@@ -49,7 +49,7 @@ impl<'a> ScanExt<'a> for CapturedSpan<'a> {
 
 impl<'a> CapturedSpan<'a> {
     /// Deeply scans all descendants of this span.
-    pub fn deep_scan_spans(self) -> Scanner<Self, CapturedSpanDescendants<'a>> {
+    pub fn deep_scan_spans(self) -> Scanner<Self, DescendantSpans<'a>> {
         Scanner::new(self, |span| span.descendants())
     }
 

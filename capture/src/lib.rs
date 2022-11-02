@@ -69,7 +69,7 @@ mod layer;
 pub mod predicates;
 
 pub use crate::{
-    iter::{CapturedEvents, CapturedSpanDescendants, CapturedSpans, DescendantEvents},
+    iter::{CapturedEvents, CapturedSpans, DescendantEvents, DescendantSpans},
     layer::{CaptureLayer, SharedStorage, Storage},
 };
 
@@ -320,8 +320,8 @@ impl<'a> CapturedSpan<'a> {
     ///
     /// In the simplest case (spans are not re-entered, span parents are contextual), the iteration
     /// order is the span capture order. In the general case, no particular order is guaranteed.
-    pub fn descendants(&self) -> CapturedSpanDescendants<'a> {
-        CapturedSpanDescendants::new(self)
+    pub fn descendants(&self) -> DescendantSpans<'a> {
+        DescendantSpans::new(self)
     }
 
     /// Iterates over the descendant [events](CapturedEvent) of this span. The iteration order

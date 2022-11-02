@@ -59,7 +59,9 @@ mod tests;
 pub use self::{
     combinators::{And, Or},
     ext::{ScanExt, Scanner},
-    field::{field, message, FieldPredicate, IntoFieldPredicate, MessagePredicate},
+    field::{
+        field, message, value, FieldPredicate, IntoFieldPredicate, MessagePredicate, ValuePredicate,
+    },
     level::{level, IntoLevelPredicate, LevelPredicate},
     name::{name, NamePredicate},
     parent::{ancestor, parent, AncestorPredicate, ParentPredicate},

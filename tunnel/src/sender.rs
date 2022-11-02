@@ -7,11 +7,11 @@ use tracing_core::{
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::{types::ValueVisitor, CallSiteData, MetadataId, RawSpanId, TracingEvent};
+use crate::{types::TracedValueVisitor, CallSiteData, MetadataId, RawSpanId, TracingEvent};
 
 impl TracingEvent {
     fn new_span(span: &Attributes<'_>, metadata_id: MetadataId, id: RawSpanId) -> Self {
-        let mut visitor = ValueVisitor::default();
+        let mut visitor = TracedValueVisitor::default();
         span.record(&mut visitor);
         Self::NewSpan {
             id,
@@ -22,7 +22,7 @@ impl TracingEvent {
     }
 
     fn values_recorded(id: RawSpanId, values: &Record<'_>) -> Self {
-        let mut visitor = ValueVisitor::default();
+        let mut visitor = TracedValueVisitor::default();
         values.record(&mut visitor);
         Self::ValuesRecorded {
             id,
@@ -31,7 +31,7 @@ impl TracingEvent {
     }
 
     fn new_event(event: &Event<'_>, metadata_id: MetadataId) -> Self {
-        let mut visitor = ValueVisitor::default();
+        let mut visitor = TracedValueVisitor::default();
         event.record(&mut visitor);
         Self::NewEvent {
             metadata_id,
