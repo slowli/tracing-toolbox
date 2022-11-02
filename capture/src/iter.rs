@@ -164,14 +164,15 @@ impl ExactSizeIterator for CapturedEvents<'_> {
     }
 }
 
-/// Depth-first iterator over [`CapturedSpan`]s returned by [`CapturedSpan::descendants()`].
+/// Iterator over descendant [`CapturedSpan`]s of a span.
+/// Returned by [`CapturedSpan::descendants()`].
 #[derive(Debug)]
-pub struct CapturedSpanDescendants<'a> {
+pub struct DescendantSpans<'a> {
     storage: &'a Storage,
     layers: Vec<&'a [Id<CapturedSpanInner>]>,
 }
 
-impl<'a> CapturedSpanDescendants<'a> {
+impl<'a> DescendantSpans<'a> {
     pub(crate) fn new(root: &CapturedSpan<'a>) -> Self {
         Self {
             storage: root.storage,
@@ -180,7 +181,7 @@ impl<'a> CapturedSpanDescendants<'a> {
     }
 }
 
-impl<'a> Iterator for CapturedSpanDescendants<'a> {
+impl<'a> Iterator for DescendantSpans<'a> {
     type Item = CapturedSpan<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -200,12 +201,12 @@ impl<'a> Iterator for CapturedSpanDescendants<'a> {
     }
 }
 
-/// Iterator over the descendant [events](CapturedEvent) of a [`CapturedSpan`] returned
-/// from [`descendant_events()`](CapturedSpan::descendant_events()).
+/// Iterator over the descendant [events](CapturedEvent) of a [`CapturedSpan`].
+/// Returned by [`CapturedSpan::descendant_events()`].
 #[derive(Debug)]
 pub struct DescendantEvents<'a> {
     inner: FlatMap<
-        CapturedSpanDescendants<'a>,
+        DescendantSpans<'a>,
         CapturedEvents<'a>,
         fn(CapturedSpan<'a>) -> CapturedEvents<'a>,
     >,
