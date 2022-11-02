@@ -370,3 +370,29 @@ fn items_from_different_storages_are_not_comparable() {
     assert_ne!(event, other_event);
     assert!(event.partial_cmp(&other_event).is_none());
 }
+
+#[test]
+fn explicit_parent_is_correctly_handled() {
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || {
+        let parent = tracing::warn_span!("greeting");
+        tracing::info_span!("_").in_scope(|| {
+            tracing::info!(parent: &parent, "hello, world!");
+            tracing::info_span!(parent: &parent, "child").in_scope(|| {
+                tracing::info!("hi");
+            });
+        });
+    });
+
+    let storage = storage.lock();
+    let mut events = storage.all_events();
+    assert_eq!(events.len(), 2);
+    let event = events.next().unwrap();
+    let event_parent = event.parent().unwrap();
+    assert_eq!(event_parent.metadata().name(), "greeting");
+
+    let child_span = events.next().unwrap().parent().unwrap();
+    assert_eq!(child_span.metadata().name(), "child");
+    assert_eq!(child_span.parent(), Some(event_parent));
+}
