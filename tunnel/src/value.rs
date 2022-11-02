@@ -83,13 +83,34 @@ impl TracedValue {
         Self::Object(DebugObject(format!("{object:?}")))
     }
 
-    /// Tries to convert this value into a specific subtype. Returns `None` if the conversion
-    /// fails.
-    pub fn try_as<'s, T>(&'s self) -> Option<T::Output>
-    where
-        T: FromTracedValue<'s> + ?Sized,
-    {
-        T::from_value(self)
+    /// Returns value as a Boolean, or `None` if it's not a Boolean value.
+    #[inline]
+    pub fn as_bool(&self) -> Option<bool> {
+        bool::from_value(self)
+    }
+
+    /// Returns value as a signed integer, or `None` if it's not one.
+    #[inline]
+    pub fn as_int(&self) -> Option<i128> {
+        i128::from_value(self)
+    }
+
+    /// Returns value as an unsigned integer, or `None` if it's not one.
+    #[inline]
+    pub fn as_uint(&self) -> Option<u128> {
+        u128::from_value(self)
+    }
+
+    /// Returns value as a floating-point value, or `None` if it's not one.
+    #[inline]
+    pub fn as_float(&self) -> Option<f64> {
+        f64::from_value(self)
+    }
+
+    /// Returns value as a string, or `None` if it's not one.
+    #[inline]
+    pub fn as_str(&self) -> Option<&str> {
+        str::from_value(self)
     }
 
     /// Checks whether this value is a [`DebugObject`] with the same [`Debug`](fmt::Debug)

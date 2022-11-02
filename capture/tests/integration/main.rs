@@ -135,7 +135,7 @@ fn recorded_span_values_are_restored() {
     assert_eq!(span.stats().entered, 1);
     assert!(span.stats().is_closed);
     let event = span.events().next().unwrap();
-    assert_eq!(event["message"].try_as::<str>(), Some("test"));
+    assert_eq!(event["message"].as_str(), Some("test"));
 }
 
 #[test]
@@ -261,14 +261,14 @@ fn capturing_span_hierarchy() {
     assert_eq!(inner_span["value"], 0_u64);
     let ancestor_values: Vec<_> = inner_span
         .ancestors()
-        .filter_map(|span| span["value"].try_as::<u64>())
+        .filter_map(|span| span["value"].as_uint())
         .collect();
     assert_eq!(ancestor_values, [1, 2, 3, 4, 5]);
 
     let middle_span = storage.scan_spans().single(&field("value", 3_u64));
     let ancestor_values: Vec<_> = middle_span
         .ancestors()
-        .filter_map(|span| span["value"].try_as::<u64>())
+        .filter_map(|span| span["value"].as_uint())
         .collect();
     assert_eq!(ancestor_values, [4, 5]);
 
@@ -319,9 +319,9 @@ fn capturing_wide_span_graph() {
     let root = storage.root_spans().next().unwrap();
     let counters: Vec<_> = root
         .descendants()
-        .filter_map(|span| span["counter"].try_as::<u64>())
+        .filter_map(|span| span["counter"].as_uint())
         .collect();
-    let max = counters.len() as u64;
+    let max = counters.len() as u128;
     assert!(counters.iter().copied().eq(1..=max), "{counters:?}");
 
     let predicate = level(Level::DEBUG) & field("counter", 10_u64);
@@ -330,7 +330,7 @@ fn capturing_wide_span_graph() {
     let event = root.deep_scan_events().first(&predicate);
     let ancestor_counters: Vec<_> = event
         .ancestors()
-        .filter_map(|span| span["counter"].try_as::<u64>())
+        .filter_map(|span| span["counter"].as_uint())
         .collect();
     assert_eq!(ancestor_counters, [3, 2, 1, 0]);
 }
