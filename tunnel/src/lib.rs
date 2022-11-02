@@ -156,7 +156,7 @@ pub use crate::receiver::{
 pub use crate::sender::TracingEventSender;
 pub use crate::types::{
     CallSiteData, CallSiteKind, DebugObject, MetadataId, RawSpanId, TracedError, TracedValue,
-    TracedValues, TracingEvent, TracingLevel, ValueVisitor,
+    TracedValues, TracingEvent, TracingLevel, ValueVisitor, FromTracedValue,
 };
 
 #[cfg(doctest)]

@@ -4,7 +4,7 @@ use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use tracing_core::{field::Visit, Field, Level, Metadata};
 
-use std::{borrow::Cow, error, fmt, hash::Hash};
+use std::{borrow::{Borrow, Cow}, error, fmt, hash::Hash};
 
 /// ID of a tracing [`Metadata`] record as used in [`TracingEvent`]s.
 pub type MetadataId = u64;
@@ -277,6 +277,17 @@ macro_rules! impl_value_conversions {
                 other == self
             }
         }
+
+        impl FromTracedValue<'_> for $source {
+            type Output = Self;
+
+            fn from_value(value: &TracedValue) -> Option<Self::Output> {
+                match value {
+                    TracedValue::$variant(value) => Some(*value),
+                    _ => None,
+                }
+            }
+        }
     };
 
     (TracedValue :: $variant:ident ($source:ty as $field_ty:ty)) => {
@@ -298,6 +309,17 @@ macro_rules! impl_value_conversions {
         impl PartialEq<TracedValue> for $source {
             fn eq(&self, other: &TracedValue) -> bool {
                 other == self
+            }
+        }
+
+        impl FromTracedValue<'_> for $source {
+            type Output = Self;
+
+            fn from_value(value: &TracedValue) -> Option<Self::Output> {
+                match value {
+                    TracedValue::$variant(value) => (*value).try_into().ok(),
+                    _ => None,
+                }
             }
         }
     };
@@ -352,44 +374,13 @@ impl TracedValue {
         Self::Object(DebugObject(format!("{object:?}")))
     }
 
-    /// Returns value as a Boolean, or `None` if it's not a Boolean value.
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            Self::Bool(value) => Some(*value),
-            _ => None,
-        }
-    }
-
-    /// Returns value as a signed integer, or `None` if it's not one.
-    pub fn as_int(&self) -> Option<i128> {
-        match self {
-            Self::Int(value) => Some(*value),
-            _ => None,
-        }
-    }
-
-    /// Returns value as an unsigned integer, or `None` if it's not one.
-    pub fn as_uint(&self) -> Option<u128> {
-        match self {
-            Self::UInt(value) => Some(*value),
-            _ => None,
-        }
-    }
-
-    /// Returns value as a floating-point value, or `None` if it's not one.
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            Self::Float(value) => Some(*value),
-            _ => None,
-        }
-    }
-
-    /// Returns value as a string, or `None` if it's not one.
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Self::String(value) => Some(value),
-            _ => None,
-        }
+    /// Tries to convert this value into a specific subtype. Returns `None` if the conversion
+    /// fails.
+    pub fn try_as<'s, T>(&'s self) -> Option<T::Output>
+    where
+        T: FromTracedValue<'s> + ?Sized,
+    {
+        T::from_value(self)
     }
 
     /// Checks whether this value is a [`DebugObject`] with the same [`Debug`](fmt::Debug)
@@ -412,6 +403,25 @@ impl TracedValue {
 
     fn error(err: &(dyn error::Error + 'static)) -> Self {
         Self::Error(TracedError::new(err))
+    }
+}
+
+/// Fallible conversion from a [`TracedValue`] reference.
+pub trait FromTracedValue<'a> {
+    /// Output of the conversion.
+    type Output: Borrow<Self> + 'a;
+    /// Performs the conversion.
+    fn from_value(value: &'a TracedValue) -> Option<Self::Output>;
+}
+
+impl<'a> FromTracedValue<'a> for str {
+    type Output = &'a str;
+
+    fn from_value(value: &'a TracedValue) -> Option<Self::Output> {
+        match value {
+            TracedValue::String(value) => Some(value),
+            _ => None,
+        }
     }
 }
 
