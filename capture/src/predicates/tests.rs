@@ -2,7 +2,7 @@
 
 use predicates::{
     constant::always,
-    ord::eq,
+    ord::{eq, gt},
     prelude::*,
     reflection::{Case, Product},
     str::{ends_with, starts_with},
@@ -221,4 +221,7 @@ fn using_extensions() {
 
     scanner.all(&field("val", [always()]));
     scanner.none(&level(LevelFilter::INFO));
+
+    let event = scanner.first(&field("val", value(gt(2_i64))));
+    assert_eq!(event["val"], 3_i64);
 }

@@ -5,10 +5,10 @@ use predicates::{
     Predicate,
 };
 
-use std::fmt;
+use std::{any::type_name, borrow::Borrow, fmt, marker::PhantomData};
 
 use crate::{Captured, CapturedEvent};
-use tracing_tunnel::TracedValue;
+use tracing_tunnel::{FromTracedValue, TracedValue};
 
 /// Conversion into a predicate for a [`TracedValue`] used in the [`field()`] function.
 pub trait IntoFieldPredicate {
@@ -52,6 +52,7 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 ///
 /// - `bool`, `i64`, `i128`, `u64`, `u128`, `f64`, `&str`: will be compared to the `TracedValue`
 ///   using the corresponding [`PartialEq`] implementation.
+/// - A predicate produced by the [`value()`] function.
 /// - Any `Predicate` for [`TracedValue`]. To bypass Rust orphaning rules, the predicate
 ///   must be enclosed in square brackets (i.e., a one-value array).
 ///
@@ -60,9 +61,9 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 /// # Examples
 ///
 /// ```
-/// # use predicates::constant::always;
+/// # use predicates::{constant::always, ord::gt};
 /// # use tracing_subscriber::{layer::SubscriberExt, Registry};
-/// # use tracing_capture::{predicates::{field, ScanExt}, CaptureLayer, SharedStorage};
+/// # use tracing_capture::{predicates::{field, value, ScanExt}, CaptureLayer, SharedStorage};
 /// let storage = SharedStorage::default();
 /// let subscriber = Registry::default().with(CaptureLayer::new(&storage));
 /// tracing::subscriber::with_default(subscriber, || {
@@ -76,6 +77,7 @@ impl_into_field_predicate!(bool, i64, i128, u64, u128, f64, &str);
 /// let spans = storage.scan_spans();
 /// let _ = spans.single(&field("arg", [always()]));
 /// let _ = spans.single(&field("arg", 5_i64));
+/// let _ = spans.single(&field("arg", value(gt(3_i64))));
 /// ```
 pub fn field<P: IntoFieldPredicate>(
     name: &'static str,
@@ -157,6 +159,119 @@ impl<V: fmt::Debug + PartialEq<TracedValue>> Predicate<TracedValue> for EquivPre
         } else {
             None
         }
+    }
+}
+
+/// Creates a predicate for a [`TracedValue`] that checks whether the value matches
+/// the specified criteria for a particular subtype (e.g., an unsigned integer).
+/// If the value has another subtype, the predicate is false.
+///
+/// Returned predicates can be supplied to the [`field()`] function.
+///
+/// # Arguments
+///
+/// The argument must be a predicate for one of types that can be obtained from a [`TracedValue`]
+/// reference: `bool`, `i64`, `i128`, `u64`, `u128`, `f64`, or `str`. The type can be specified
+/// explicitly, but usually you can make Rust properly infer it.
+///
+/// # Examples
+///
+/// ```
+/// # use predicates::{ord::{gt, ne}, iter::in_hash, str::contains};
+/// # use tracing_capture::predicates::{field, value};
+/// let _ = field("return", value(gt(5.0)));
+/// let _ = field("name", value(contains("test")));
+/// let _ = field("float", value(in_hash([3_u64, 5])));
+/// // ^ Note the specified integer type.
+/// ```
+pub fn value<T, P>(matches: P) -> ValuePredicate<T, P>
+where
+    T: for<'a> FromTracedValue<'a> + ?Sized,
+    P: Predicate<T>,
+{
+    ValuePredicate {
+        matches,
+        _ty: PhantomData,
+    }
+}
+
+/// Predicate for [`TracedValue`]s returned by the [`value()`] function.
+#[derive(Debug)]
+pub struct ValuePredicate<T: ?Sized, P> {
+    matches: P,
+    _ty: PhantomData<fn(T)>,
+}
+
+impl<T: ?Sized, P: Clone> Clone for ValuePredicate<T, P> {
+    fn clone(&self) -> Self {
+        Self {
+            matches: self.matches.clone(),
+            _ty: PhantomData,
+        }
+    }
+}
+
+impl<T: ?Sized, P: Copy> Copy for ValuePredicate<T, P> {}
+
+impl<T: ?Sized, P: PartialEq> PartialEq for ValuePredicate<T, P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.matches == other.matches
+    }
+}
+
+impl<T, P> fmt::Display for ValuePredicate<T, P>
+where
+    T: for<'a> FromTracedValue<'a> + ?Sized,
+    P: Predicate<T>,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "is<{}>({})", type_name::<T>(), self.matches)
+    }
+}
+
+impl<T, P> PredicateReflection for ValuePredicate<T, P>
+where
+    T: for<'a> FromTracedValue<'a> + ?Sized,
+    P: Predicate<T>,
+{
+}
+
+impl<T, P> Predicate<TracedValue> for ValuePredicate<T, P>
+where
+    T: for<'a> FromTracedValue<'a> + ?Sized,
+    P: Predicate<T>,
+{
+    fn eval(&self, variable: &TracedValue) -> bool {
+        T::from_value(variable).map_or(false, |value| self.matches.eval(value.borrow()))
+    }
+
+    fn find_case(&self, expected: bool, variable: &TracedValue) -> Option<Case<'_>> {
+        let value = T::from_value(variable);
+        let value = if let Some(value) = &value {
+            value.borrow()
+        } else {
+            return if expected {
+                None // was expecting another var type
+            } else {
+                let product = Product::new(format!("var.as<{}>", type_name::<T>()), "None");
+                Some(Case::new(Some(self), expected).add_product(product))
+            };
+        };
+
+        let child = self.matches.find_case(expected, value)?;
+        Some(Case::new(Some(self), expected).add_child(child))
+    }
+}
+
+impl<T, P> IntoFieldPredicate for ValuePredicate<T, P>
+where
+    T: for<'a> FromTracedValue<'a> + ?Sized,
+    P: Predicate<T>,
+{
+    type Predicate = Self;
+
+    fn into_predicate(self) -> Self::Predicate {
+        self
     }
 }
 
