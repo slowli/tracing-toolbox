@@ -94,7 +94,7 @@ jobs:
           command: test
           args: --workspace --all-features --doc
 
-  build-nostd:
+  build-nightly:
     runs-on: ubuntu-latest
 
     steps:
@@ -104,7 +104,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: target
-          key: ${{ runner.os }}-nostd-cargo-build-target
+          key: ${{ runner.os }}-nightly-cargo-build-target
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -119,13 +119,18 @@ jobs:
         with:
           command: build
           args: -p tracing-tunnel --lib --no-default-features --features sender --target thumbv7m-none-eabi -Z avoid-dev-deps
+      - name: Build capture
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p tracing-capture --lib --no-default-features -Z avoid-dev-deps
 
   document:
     if: github.event_name == 'push'
     needs:
       - build
       - build-msrv
-      - build-nostd
+      - build-nightly
     runs-on: ubuntu-latest
 
     steps:
