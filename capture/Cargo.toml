@@ -23,13 +23,13 @@ tracing-tunnel = { version = "0.1.0", path = "../tunnel" }
 [dependencies.tracing-subscriber]
 version = "0.3.16"
 default-features = false
-features = ["std"]
+features = ["std", "registry"]
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 doc-comment = "0.3.3"
 tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.16", features = ["registry", "fmt"] }
+tracing-subscriber = { version = "0.3.16", features = ["fmt"] }
 version-sync = "0.9.4"
 
 tracing-tunnel = { version = "0.1.0", path = "../tunnel", features = ["sender", "receiver"] }

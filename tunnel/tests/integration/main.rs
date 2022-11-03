@@ -176,10 +176,7 @@ fn event_fields_have_same_order() {
     });
 
     for fields in debug_fields {
-        let fields: Vec<_> = fields
-            .iter()
-            .map(|(name, value)| (name.as_str(), value))
-            .collect();
+        let fields: Vec<_> = fields.iter().collect();
         assert_matches!(
             fields.as_slice(),
             [

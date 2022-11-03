@@ -5,38 +5,32 @@ use tracing_core::{
     Event, Interest, Metadata, Subscriber,
 };
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::{types::TracedValueVisitor, CallSiteData, MetadataId, RawSpanId, TracingEvent};
+use crate::{CallSiteData, MetadataId, RawSpanId, TracedValues, TracingEvent};
 
 impl TracingEvent {
     fn new_span(span: &Attributes<'_>, metadata_id: MetadataId, id: RawSpanId) -> Self {
-        let mut visitor = TracedValueVisitor::default();
-        span.record(&mut visitor);
         Self::NewSpan {
             id,
             parent_id: span.parent().map(Id::into_u64),
             metadata_id,
-            values: visitor.values,
+            values: TracedValues::from_values(span.values()),
         }
     }
 
     fn values_recorded(id: RawSpanId, values: &Record<'_>) -> Self {
-        let mut visitor = TracedValueVisitor::default();
-        values.record(&mut visitor);
         Self::ValuesRecorded {
             id,
-            values: visitor.values,
+            values: TracedValues::from_record(values),
         }
     }
 
     fn new_event(event: &Event<'_>, metadata_id: MetadataId) -> Self {
-        let mut visitor = TracedValueVisitor::default();
-        event.record(&mut visitor);
         Self::NewEvent {
             metadata_id,
             parent: event.parent().map(Id::into_u64),
-            values: visitor.values,
+            values: TracedValues::from_event(event),
         }
     }
 }
@@ -55,7 +49,7 @@ impl TracingEvent {
 /// [Tardigrade client library]: https://github.com/slowli/tardigrade
 #[derive(Debug)]
 pub struct TracingEventSender<F = fn(TracingEvent)> {
-    next_span_id: AtomicU64,
+    next_span_id: AtomicU32,
     on_event: F,
 }
 
@@ -63,7 +57,7 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
     /// Creates a subscriber with the specified "on event" hook.
     pub fn new(on_event: F) -> Self {
         Self {
-            next_span_id: AtomicU64::new(1), // 0 is invalid span ID
+            next_span_id: AtomicU32::new(1), // 0 is invalid span ID
             on_event,
         }
     }
@@ -93,7 +87,7 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
 
     fn new_span(&self, span: &Attributes<'_>) -> Id {
         let metadata_id = Self::metadata_id(span.metadata());
-        let span_id = self.next_span_id.fetch_add(1, Ordering::SeqCst);
+        let span_id = u64::from(self.next_span_id.fetch_add(1, Ordering::SeqCst));
         self.send(TracingEvent::new_span(span, metadata_id, span_id));
         Id::from_u64(span_id)
     }

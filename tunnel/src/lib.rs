@@ -53,7 +53,19 @@
 //!
 //! # Crate features
 //!
-//! Each of the two major features outlined above is gated by the corresponding opt-in feature.
+//! Each of the two major features outlined above is gated by the corresponding opt-in feature,
+//! [`sender`](#sender) and [`receiver`](#receiver).
+//! Without these features enabled, the crate only provides data types to capture tracing data.
+//!
+//! ## `std`
+//!
+//! *(On by default)*
+//!
+//! Enables support of types from `std`, such as the `Error` trait. Propagates to [`tracing-core`],
+//! enabling `Error` support there.
+//!
+//! Even if this feature is off, the crate requires the global allocator (i.e., the `alloc` crate)
+//! and `u32` atomics.
 //!
 //! ## `sender`
 //!
@@ -63,9 +75,11 @@
 //!
 //! ## `receiver`
 //!
-//! *(Off by default)*
+//! *(Off by default; requires `std`)*
 //!
-//! Provides [`TracingEventReceiver`].
+//! Provides [`TracingEventReceiver`] and related types.
+//!
+//! [`tracing-core`]: https://docs.rs/tracing-core/0.1/tracing_core
 //!
 //! # Examples
 //!
@@ -132,6 +146,7 @@
 //! // be persisted, while `local_spans` should be stored in RAM.
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
 // Documentation settings.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_root_url = "https://docs.rs/tracing-tunnel/0.1.0")]
@@ -148,6 +163,22 @@ mod receiver;
 mod sender;
 mod types;
 mod value;
+mod values;
+
+// Polyfill for `alloc` types.
+mod alloc {
+    #[cfg(not(feature = "std"))]
+    extern crate alloc;
+    #[cfg(feature = "std")]
+    use std as alloc;
+
+    pub use alloc::{
+        borrow::{Cow, ToOwned},
+        format,
+        string::String,
+        vec::{self, Vec},
+    };
+}
 
 #[cfg(feature = "receiver")]
 pub use crate::receiver::{
@@ -155,12 +186,12 @@ pub use crate::receiver::{
 };
 #[cfg(feature = "sender")]
 pub use crate::sender::TracingEventSender;
+#[cfg(feature = "std")]
+pub use crate::value::TracedError;
 pub use crate::{
-    types::{
-        CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracedValueVisitor, TracedValues,
-        TracingEvent, TracingLevel,
-    },
-    value::{DebugObject, FromTracedValue, TracedError, TracedValue},
+    types::{CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracingEvent, TracingLevel},
+    value::{DebugObject, FromTracedValue, TracedValue},
+    values::{TracedValues, TracedValuesIter},
 };
 
 #[cfg(doctest)]

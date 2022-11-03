@@ -1,12 +1,14 @@
 //! Types to carry tracing events over the WASM client-host boundary.
 
-use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
-use tracing_core::{field::Visit, Field, Level, Metadata};
+use tracing_core::{Level, Metadata};
 
-use std::{borrow::Cow, error, fmt, hash::Hash};
+use core::hash::Hash;
 
-use crate::TracedValue;
+use crate::{
+    alloc::{Cow, String, Vec},
+    TracedValues,
+};
 
 /// ID of a tracing [`Metadata`] record as used in [`TracingEvent`]s.
 pub type MetadataId = u64;
@@ -182,69 +184,4 @@ pub enum TracingEvent {
         /// Values associated with the event.
         values: TracedValues<String>,
     },
-}
-
-/// Collection of named [`TracedValue`]s.
-pub type TracedValues<K> = LinkedHashMap<K, TracedValue>;
-
-#[doc(hidden)] // not public; used by `tracing-capture`
-pub struct TracedValueVisitor<S> {
-    pub values: TracedValues<S>,
-}
-
-impl<S: fmt::Debug + Eq + Hash> fmt::Debug for TracedValueVisitor<S> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("ValueVisitor")
-            .field("values", &self.values)
-            .finish()
-    }
-}
-
-impl<S: Eq + Hash> Default for TracedValueVisitor<S> {
-    fn default() -> Self {
-        Self {
-            values: TracedValues::new(),
-        }
-    }
-}
-
-impl<S: From<&'static str> + Eq + Hash> Visit for TracedValueVisitor<S> {
-    fn record_f64(&mut self, field: &Field, value: f64) {
-        self.values.insert(field.name().into(), value.into());
-    }
-
-    fn record_i64(&mut self, field: &Field, value: i64) {
-        self.values.insert(field.name().into(), value.into());
-    }
-
-    fn record_u64(&mut self, field: &Field, value: u64) {
-        self.values.insert(field.name().into(), value.into());
-    }
-
-    fn record_i128(&mut self, field: &Field, value: i128) {
-        self.values.insert(field.name().into(), value.into());
-    }
-
-    fn record_u128(&mut self, field: &Field, value: u128) {
-        self.values.insert(field.name().into(), value.into());
-    }
-
-    fn record_bool(&mut self, field: &Field, value: bool) {
-        self.values.insert(field.name().into(), value.into());
-    }
-
-    fn record_str(&mut self, field: &Field, value: &str) {
-        self.values.insert(field.name().into(), value.into());
-    }
-
-    fn record_error(&mut self, field: &Field, value: &(dyn error::Error + 'static)) {
-        self.values
-            .insert(field.name().into(), TracedValue::error(value));
-    }
-
-    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-        self.values
-            .insert(field.name().into(), TracedValue::debug(value));
-    }
 }
