@@ -2,40 +2,52 @@
 
 use serde::{Deserialize, Serialize};
 
-use std::{borrow::Borrow, error, fmt};
+use core::{borrow::Borrow, fmt};
 
-/// (De)serializable presentation for an error recorded as a value in a tracing span or event.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct TracedError {
-    /// Error message produced by its [`Display`](fmt::Display) implementation.
-    pub message: String,
-    /// Error [source](error::Error::source()).
-    pub source: Option<Box<TracedError>>,
-}
+use crate::alloc::{format, String, ToOwned};
 
-impl TracedError {
-    fn new(err: &(dyn error::Error + 'static)) -> Self {
-        Self {
-            message: err.to_string(),
-            source: err.source().map(|source| Box::new(Self::new(source))),
+#[cfg(feature = "std")]
+mod error {
+    use serde::{Deserialize, Serialize};
+
+    use std::{error, fmt};
+
+    /// (De)serializable presentation for an error recorded as a value in a tracing span or event.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[non_exhaustive]
+    pub struct TracedError {
+        /// Error message produced by its [`Display`](fmt::Display) implementation.
+        pub message: String,
+        /// Error [source](error::Error::source()).
+        pub source: Option<Box<TracedError>>,
+    }
+
+    impl TracedError {
+        pub(super) fn new(err: &(dyn error::Error + 'static)) -> Self {
+            Self {
+                message: err.to_string(),
+                source: err.source().map(|source| Box::new(Self::new(source))),
+            }
+        }
+    }
+
+    impl fmt::Display for TracedError {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str(&self.message)
+        }
+    }
+
+    impl error::Error for TracedError {
+        fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+            self.source
+                .as_ref()
+                .map(|source| source.as_ref() as &(dyn error::Error + 'static))
         }
     }
 }
 
-impl fmt::Display for TracedError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl error::Error for TracedError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        self.source
-            .as_ref()
-            .map(|source| source.as_ref() as &(dyn error::Error + 'static))
-    }
-}
+#[cfg(feature = "std")]
+pub use self::error::TracedError;
 
 /// Opaque wrapper for a [`Debug`](fmt::Debug)gable object recorded as a value
 /// in a tracing span or event.
@@ -74,6 +86,7 @@ pub enum TracedValue {
     /// Opaque object implementing the [`Debug`](fmt::Debug) trait.
     Object(DebugObject),
     /// Opaque error.
+    #[cfg(feature = "std")]
     Error(TracedError),
 }
 
@@ -131,7 +144,8 @@ impl TracedValue {
         }
     }
 
-    pub(crate) fn error(err: &(dyn error::Error + 'static)) -> Self {
+    #[cfg(feature = "std")]
+    pub(crate) fn error(err: &(dyn std::error::Error + 'static)) -> Self {
         Self::Error(TracedError::new(err))
     }
 }

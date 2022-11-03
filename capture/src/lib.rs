@@ -136,16 +136,13 @@ impl<'a> CapturedEvent<'a> {
     }
 
     /// Iterates over values associated with the event.
-    pub fn values(&self) -> impl Iterator<Item = (&'static str, &TracedValue)> + '_ {
-        self.inner.values.iter().map(|(name, value)| (*name, value))
+    pub fn values(&self) -> impl Iterator<Item = (&str, &TracedValue)> + '_ {
+        self.inner.values.iter()
     }
 
     /// Returns a value for the specified field, or `None` if the value is not defined.
     pub fn value(&self, name: &str) -> Option<&'a TracedValue> {
-        self.inner
-            .values
-            .iter()
-            .find_map(|(s, value)| if *s == name { Some(value) } else { None })
+        self.inner.values.get(name)
     }
 
     /// Returns the message recorded in this event, i.e., the value of the `message` field
@@ -278,16 +275,13 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Iterates over values that the span was created with, or which were recorded later.
-    pub fn values(&self) -> impl Iterator<Item = (&'static str, &TracedValue)> + '_ {
-        self.inner.values.iter().map(|(name, value)| (*name, value))
+    pub fn values(&self) -> impl Iterator<Item = (&str, &TracedValue)> + '_ {
+        self.inner.values.iter()
     }
 
     /// Returns a value for the specified field, or `None` if the value is not defined.
     pub fn value(&self, name: &str) -> Option<&'a TracedValue> {
-        self.inner
-            .values
-            .iter()
-            .find_map(|(s, value)| if *s == name { Some(value) } else { None })
+        self.inner.values.get(name)
     }
 
     /// Returns statistics about span operations.

@@ -178,7 +178,7 @@ fn message_predicates() {
     let predicate = message(eq("completed computations"));
     assert!(predicate.eval(&event));
 
-    storage.events[event_id].values.remove("message");
+    storage.events[event_id].values = TracedValues::from_iter([("val", 42_i64.into())]);
     assert!(!predicate.eval(&storage.event(event_id)));
     storage.events[event_id]
         .values

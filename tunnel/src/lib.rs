@@ -132,6 +132,7 @@
 //! // be persisted, while `local_spans` should be stored in RAM.
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
 // Documentation settings.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_root_url = "https://docs.rs/tracing-tunnel/0.1.0")]
@@ -148,6 +149,22 @@ mod receiver;
 mod sender;
 mod types;
 mod value;
+mod values;
+
+// Polyfill for `alloc` types.
+mod alloc {
+    #[cfg(not(feature = "std"))]
+    extern crate alloc;
+    #[cfg(feature = "std")]
+    use std as alloc;
+
+    pub use alloc::{
+        borrow::{Cow, ToOwned},
+        format,
+        string::String,
+        vec::{self, Vec},
+    };
+}
 
 #[cfg(feature = "receiver")]
 pub use crate::receiver::{
@@ -155,12 +172,12 @@ pub use crate::receiver::{
 };
 #[cfg(feature = "sender")]
 pub use crate::sender::TracingEventSender;
+#[cfg(feature = "std")]
+pub use crate::value::TracedError;
 pub use crate::{
-    types::{
-        CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracedValueVisitor, TracedValues,
-        TracingEvent, TracingLevel,
-    },
-    value::{DebugObject, FromTracedValue, TracedError, TracedValue},
+    types::{CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracingEvent, TracingLevel},
+    value::{DebugObject, FromTracedValue, TracedValue},
+    values::{TracedValues, TracedValuesIter},
 };
 
 #[cfg(doctest)]

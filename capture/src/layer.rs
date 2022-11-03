@@ -20,7 +20,7 @@ use crate::{
     CapturedEvent, CapturedEventId, CapturedEventInner, CapturedEvents, CapturedSpan,
     CapturedSpanId, CapturedSpanInner, CapturedSpans, SpanStats,
 };
-use tracing_tunnel::{TracedValueVisitor, TracedValues};
+use tracing_tunnel::TracedValues;
 
 /// Storage of captured tracing information.
 ///
@@ -250,20 +250,15 @@ where
         } else {
             None
         };
-        let mut visitor = TracedValueVisitor::default();
-        attrs.record(&mut visitor);
-        let arena_id = self
-            .lock()
-            .push_span(attrs.metadata(), visitor.values, parent_id);
+        let values = TracedValues::from_values(attrs.values());
+        let arena_id = self.lock().push_span(attrs.metadata(), values, parent_id);
         ctx.span(id).unwrap().extensions_mut().insert(arena_id);
     }
 
     fn on_record(&self, id: &Id, values: &Record<'_>, ctx: Context<'_, S>) {
         let span = ctx.span(id).unwrap();
         if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
-            let mut visitor = TracedValueVisitor::default();
-            values.record(&mut visitor);
-            self.lock().on_record(id, visitor.values);
+            self.lock().on_record(id, TracedValues::from_record(values));
         };
     }
 
@@ -277,10 +272,8 @@ where
         } else {
             None
         };
-        let mut visitor = TracedValueVisitor::default();
-        event.record(&mut visitor);
         self.lock()
-            .push_event(event.metadata(), visitor.values, parent_id);
+            .push_event(event.metadata(), TracedValues::from_event(event), parent_id);
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
