@@ -53,7 +53,19 @@
 //!
 //! # Crate features
 //!
-//! Each of the two major features outlined above is gated by the corresponding opt-in feature.
+//! Each of the two major features outlined above is gated by the corresponding opt-in feature,
+//! [`sender`](#sender) and [`receiver`](#receiver).
+//! Without these features enabled, the crate only provides data types to capture tracing data.
+//!
+//! ## `std`
+//!
+//! *(On by default)*
+//!
+//! Enables support of types from `std`, such as the `Error` trait. Propagates to [`tracing-core`],
+//! enabling errors support there.
+//!
+//! Even if this feature is off, the crate requires the global allocator (i.e., the `alloc` crate)
+//! and `u32` atomics.
 //!
 //! ## `sender`
 //!
@@ -63,9 +75,11 @@
 //!
 //! ## `receiver`
 //!
-//! *(Off by default)*
+//! *(Off by default; requires `std`)*
 //!
-//! Provides [`TracingEventReceiver`].
+//! Provides [`TracingEventReceiver`] and related types.
+//!
+//! [`tracing-core`]: https://docs.rs/tracing-core/0.1/tracing_core
 //!
 //! # Examples
 //!
