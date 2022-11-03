@@ -15,6 +15,7 @@ mod error {
     /// (De)serializable presentation for an error recorded as a value in a tracing span or event.
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[non_exhaustive]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
     pub struct TracedError {
         /// Error message produced by its [`Display`](fmt::Display) implementation.
         pub message: String,
@@ -87,6 +88,7 @@ pub enum TracedValue {
     Object(DebugObject),
     /// Opaque error.
     #[cfg(feature = "std")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
     Error(TracedError),
 }
 

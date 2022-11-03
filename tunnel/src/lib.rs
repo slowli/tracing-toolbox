@@ -62,7 +62,7 @@
 //! *(On by default)*
 //!
 //! Enables support of types from `std`, such as the `Error` trait. Propagates to [`tracing-core`],
-//! enabling errors support there.
+//! enabling `Error` support there.
 //!
 //! Even if this feature is off, the crate requires the global allocator (i.e., the `alloc` crate)
 //! and `u32` atomics.

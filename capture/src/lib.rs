@@ -136,7 +136,7 @@ impl<'a> CapturedEvent<'a> {
     }
 
     /// Iterates over values associated with the event.
-    pub fn values(&self) -> impl Iterator<Item = (&str, &TracedValue)> + '_ {
+    pub fn values(&self) -> impl Iterator<Item = (&'a str, &'a TracedValue)> + 'a {
         self.inner.values.iter()
     }
 
@@ -275,7 +275,7 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Iterates over values that the span was created with, or which were recorded later.
-    pub fn values(&self) -> impl Iterator<Item = (&str, &TracedValue)> + '_ {
+    pub fn values(&self) -> impl Iterator<Item = (&'a str, &'a TracedValue)> + 'a {
         self.inner.values.iter()
     }
 

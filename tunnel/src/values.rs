@@ -21,10 +21,13 @@ use crate::{
 /// Collection of named [`TracedValue`]s.
 ///
 /// Functionally this collection is similar to a `HashMap<S, TracedValue>`,
-/// with the key being that the order of [iteration](Self::iter()) is the insertion order.
+/// with the key difference being that the order of [iteration](Self::iter()) is the insertion order.
 /// If a value is updated, including via [`Extend`] etc., it preserves its old placement.
 #[derive(Clone)]
 pub struct TracedValues<S> {
+    // Using `Vec` for entries is inefficient for random access, but seems acceptable given that
+    // valid value sets have no more than 32 values. We need this (vs using `linked_hash_map`)
+    // for no-std compatibility.
     inner: Vec<(S, TracedValue)>,
 }
 
@@ -37,8 +40,8 @@ impl<S> Default for TracedValues<S> {
 impl<S: AsRef<str>> fmt::Debug for TracedValues<S> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut map = formatter.debug_map();
-        for (key, value) in &self.inner {
-            map.entry(&key.as_ref(), value);
+        for (name, value) in &self.inner {
+            map.entry(&name.as_ref(), value);
         }
         map.finish()
     }
@@ -90,9 +93,9 @@ impl<S: AsRef<str>> TracedValues<S> {
     }
 
     /// Returns the value with the specified name, or `None` if it not set.
-    pub fn get(&self, key: &str) -> Option<&TracedValue> {
-        self.inner.iter().find_map(|(existing_key, value)| {
-            if existing_key.as_ref() == key {
+    pub fn get(&self, name: &str) -> Option<&TracedValue> {
+        self.inner.iter().find_map(|(existing_name, value)| {
+            if existing_name.as_ref() == name {
                 Some(value)
             } else {
                 None
@@ -108,17 +111,18 @@ impl<S: AsRef<str>> TracedValues<S> {
     }
 
     /// Inserts a value with the specified name. If a value with the same name was present
-    /// previously, it is overwritten.
-    pub fn insert(&mut self, key: S, value: TracedValue) -> Option<TracedValue> {
+    /// previously, it is overwritten. Returns the previous value with the specified name,
+    /// if any.
+    pub fn insert(&mut self, name: S, value: TracedValue) -> Option<TracedValue> {
         let position = self
             .inner
             .iter()
-            .position(|(existing_key, _)| existing_key.as_ref() == key.as_ref());
+            .position(|(existing_name, _)| existing_name.as_ref() == name.as_ref());
         if let Some(position) = position {
             let place = &mut self.inner[position].1;
             Some(mem::replace(place, value))
         } else {
-            self.inner.push((key, value));
+            self.inner.push((name, value));
             None
         }
     }
