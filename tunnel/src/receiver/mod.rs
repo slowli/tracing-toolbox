@@ -57,7 +57,7 @@ impl TracedValue {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct SpanData {
     metadata_id: MetadataId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -107,7 +107,7 @@ impl PersistedMetadata {
 /// the lifetime of the execution and not the host [`Subscriber`].
 ///
 /// [`Subscriber`]: tracing_core::Subscriber
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersistedSpans {
     inner: HashMap<RawSpanId, SpanData>,
