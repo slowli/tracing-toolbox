@@ -97,6 +97,11 @@ impl PersistedMetadata {
     pub fn iter(&self) -> impl Iterator<Item = (MetadataId, &CallSiteData)> + '_ {
         self.inner.iter().map(|(id, data)| (*id, data))
     }
+
+    /// Merges entries from another `PersistedMetadata` instance.
+    pub fn extend(&mut self, other: Self) {
+        self.inner.extend(other.inner);
+    }
 }
 
 /// Information about alive tracing spans for a particular execution that is (de)serializable and
@@ -208,14 +213,14 @@ macro_rules! create_value_set {
 /// [`TracingEventSender`]: crate::TracingEventSender
 /// [the Tardigrade runtime]: https://github.com/slowli/tardigrade
 /// [`tracing-core`]: https://docs.rs/tracing-core/
-#[derive(Debug)]
-pub struct TracingEventReceiver<'sp> {
+#[derive(Debug, Default)]
+pub struct TracingEventReceiver {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
-    spans: &'sp mut PersistedSpans,
-    local_spans: &'sp mut LocalSpans,
+    spans: PersistedSpans,
+    local_spans: LocalSpans,
 }
 
-impl<'sp> TracingEventReceiver<'sp> {
+impl TracingEventReceiver {
     /// Maximum supported number of values in a span or event.
     const MAX_VALUES: usize = 32;
 
@@ -230,8 +235,8 @@ impl<'sp> TracingEventReceiver<'sp> {
     /// [`Subscriber`]: tracing_core::Subscriber
     pub fn new(
         metadata: PersistedMetadata,
-        spans: &'sp mut PersistedSpans,
-        local_spans: &'sp mut LocalSpans,
+        spans: PersistedSpans,
+        local_spans: LocalSpans,
     ) -> Self {
         let mut this = Self {
             metadata: HashMap::new(),
@@ -493,15 +498,19 @@ impl<'sp> TracingEventReceiver<'sp> {
             .expect("received bogus tracing event");
     }
 
-    /// Persists [`Metadata`] produced by the previously consumed events. `persisted`
-    /// should *logically* be the same metadata as provided to [`Self::new()`]; i.e.,
-    /// metadata for a particular executable, such as a WASM module.
-    pub fn persist_metadata(&self, persisted: &mut PersistedMetadata) {
-        for (&id, &metadata) in &self.metadata {
-            persisted
-                .inner
-                .entry(id)
-                .or_insert_with(|| CallSiteData::from(metadata));
-        }
+    /// Persists [`Metadata`] produced by the previously consumed events. The returned
+    /// metadata should be merged into the metadata provided to [`Self::new()`].
+    pub fn persist_metadata(&self) -> PersistedMetadata {
+        let inner = self
+            .metadata
+            .iter()
+            .map(|(&id, &metadata)| (id, CallSiteData::from(metadata)))
+            .collect();
+        PersistedMetadata { inner }
+    }
+
+    /// Returns persisted and local spans.
+    pub fn persist(self) -> (PersistedSpans, LocalSpans) {
+        (self.spans, self.local_spans)
     }
 }

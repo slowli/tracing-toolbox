@@ -202,10 +202,7 @@ fn create_fmt_subscriber() -> impl Subscriber + for<'a> LookupSpan<'a> {
 fn reproducing_events_on_fmt_subscriber() {
     let events = &EVENTS.long;
 
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut consumer =
-        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    let mut consumer = TracingEventReceiver::default();
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             consumer.receive(event.clone());
@@ -217,18 +214,16 @@ fn reproducing_events_on_fmt_subscriber() {
 fn persisting_metadata() {
     let events = &EVENTS.short;
 
-    let mut persisted = PersistedMetadata::default();
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut receiver = TracingEventReceiver::new(persisted.clone(), &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::default();
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             receiver.receive(event.clone());
         }
     });
-    receiver.persist_metadata(&mut persisted);
+    let metadata = receiver.persist_metadata();
+    let (spans, local_spans) = receiver.persist();
 
-    let names: HashSet<_> = persisted
+    let names: HashSet<_> = metadata
         .iter()
         .map(|(_, data)| data.name.as_ref())
         .collect();
@@ -236,7 +231,7 @@ fn persisting_metadata() {
     assert!(names.contains("compute"), "{names:?}");
 
     // Check that `receiver` can function after restoring `persisted` meta.
-    let mut receiver = TracingEventReceiver::new(persisted, &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             if !matches!(event, TracingEvent::NewCallSite { .. }) {
@@ -276,12 +271,12 @@ fn test_persisting_spans(reset_local_spans: bool) {
                 local_spans = LocalSpans::default();
             }
 
-            let mut receiver =
-                TracingEventReceiver::new(metadata.clone(), &mut spans, &mut local_spans);
+            let mut receiver = TracingEventReceiver::new(metadata.clone(), spans, local_spans);
             for event in events {
                 receiver.receive(event.clone());
             }
-            receiver.persist_metadata(&mut metadata);
+            metadata = receiver.persist_metadata();
+            (spans, local_spans) = receiver.persist();
         }
     });
 }

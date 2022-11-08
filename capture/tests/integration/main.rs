@@ -14,8 +14,8 @@ use tracing_capture::{
     CaptureLayer, SharedStorage, Storage,
 };
 use tracing_tunnel::{
-    CallSiteData, CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue,
-    TracedValues, TracingEvent, TracingEventReceiver, TracingLevel,
+    CallSiteData, CallSiteKind, LocalSpans, TracedValue, TracedValues, TracingEvent,
+    TracingEventReceiver, TracingLevel,
 };
 
 const CALL_SITE_DATA: CallSiteData = CallSiteData {
@@ -54,10 +54,7 @@ fn replayed_spans_are_closed_if_entered_multiple_times() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut spans = PersistedSpans::default();
-        let mut local_spans = LocalSpans::default();
-        let mut receiver =
-            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+        let mut receiver = TracingEventReceiver::default();
         for event in events {
             receiver.receive(event);
         }
@@ -91,15 +88,12 @@ fn recorded_span_values_are_restored() {
         TracingEvent::SpanExited { id: 0 },
     ];
 
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut receiver =
-        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::default();
     for event in events {
         receiver.receive(event);
     }
-    let mut metadata = PersistedMetadata::default();
-    receiver.persist_metadata(&mut metadata);
+    let metadata = receiver.persist_metadata();
+    let (spans, _) = receiver.persist();
 
     // Emulate host restart: persisted metadata / spans are restored, but `local_spans` are not.
     let more_events = [
@@ -121,9 +115,8 @@ fn recorded_span_values_are_restored() {
     ];
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
-    let mut local_spans = LocalSpans::default();
     tracing::subscriber::with_default(subscriber, || {
-        let mut receiver = TracingEventReceiver::new(metadata, &mut spans, &mut local_spans);
+        let mut receiver = TracingEventReceiver::new(metadata, spans, LocalSpans::default());
         for event in more_events {
             receiver.receive(event);
         }
@@ -185,10 +178,7 @@ fn capturing_spans_for_replayed_events() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut spans = PersistedSpans::default();
-        let mut local_spans = LocalSpans::default();
-        let mut consumer =
-            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+        let mut consumer = TracingEventReceiver::default();
         for event in events {
             consumer.receive(event.clone());
         }
