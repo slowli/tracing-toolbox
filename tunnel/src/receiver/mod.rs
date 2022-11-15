@@ -8,7 +8,10 @@ use tracing_core::{
     Event, Field, Metadata,
 };
 
-use std::{collections::HashMap, error, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    error, fmt, mem,
+};
 
 mod arena;
 #[cfg(test)]
@@ -187,14 +190,49 @@ macro_rules! create_value_set {
     };
 }
 
+/// Container for non-persisted information specific to a particular traced execution.
+#[derive(Debug, Default)]
+struct CurrentExecution {
+    uncommitted_span_ids: HashSet<RawSpanId>,
+    entered_span_ids: HashSet<RawSpanId>,
+}
+
+impl CurrentExecution {
+    fn remove_span(&mut self, id: RawSpanId) {
+        self.entered_span_ids.remove(&id);
+        self.uncommitted_span_ids.remove(&id);
+    }
+
+    fn finalize(&mut self, local_spans: &LocalSpans) {
+        for id in mem::take(&mut self.entered_span_ids) {
+            if let Some(local_id) = local_spans.inner.get(&id) {
+                TracingEventReceiver::dispatch(|dispatch| dispatch.exit(local_id));
+            }
+        }
+        for id in mem::take(&mut self.uncommitted_span_ids) {
+            if let Some(local_id) = local_spans.inner.get(&id) {
+                TracingEventReceiver::dispatch(|dispatch| dispatch.try_close(local_id.clone()));
+            }
+        }
+    }
+}
+
 /// Receiver of [`TracingEvent`]s produced by [`TracingEventSender`] that relays them
 /// to the tracing infrastructure.
 ///
-/// The consumer takes care of persisting [`Metadata`] / spans that can outlive
+/// The receiver takes care of persisting [`Metadata`] / spans that can outlive
 /// the lifetime of the host program (not just the `TracingEventReceiver` instance!).
 /// As an example, in [the Tardigrade runtime], a consumer instance is created each time
 /// a workflow is executed. It relays tracing events from the workflow logic (executed in WASM)
 /// to the host.
+///
+/// In some cases, the execution tracked by `TracingEventReceiver` may finish abnormally.
+/// (E.g., a WASM module instance panics while it has the `panic = abort` set
+/// in the compilation options.) In these cases, all entered
+/// spans are force-exited when the receiver is dropped. Additionally, spans created
+/// by the execution are closed on drop as long as they are not [persisted](Self::persist()).
+/// That is, persistence acts as a commitment of the execution results, while the default
+/// behavior is rollback.
 ///
 /// # ⚠ Resource consumption
 ///
@@ -218,6 +256,7 @@ pub struct TracingEventReceiver {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
     spans: PersistedSpans,
     local_spans: LocalSpans,
+    current_execution: CurrentExecution,
 }
 
 impl TracingEventReceiver {
@@ -242,6 +281,7 @@ impl TracingEventReceiver {
             metadata: HashMap::new(),
             spans,
             local_spans,
+            current_execution: CurrentExecution::default(),
         };
 
         for (id, data) in metadata.inner {
@@ -403,6 +443,7 @@ impl TracingEventReceiver {
                     self.local_spans.inner.insert(id, local_id);
                 }
                 self.spans.inner.insert(id, data);
+                self.current_execution.uncommitted_span_ids.insert(id);
             }
 
             TracingEvent::FollowsFrom { id, follows_from } => {
@@ -426,12 +467,14 @@ impl TracingEventReceiver {
                     self.local_spans.inner.insert(id, local_id.clone());
                     local_id
                 };
+                self.current_execution.entered_span_ids.insert(id);
                 Self::dispatch(|dispatch| dispatch.enter(&local_id));
             }
             TracingEvent::SpanExited { id } => {
                 if let Some(local_id) = self.map_span_id(id)? {
                     Self::dispatch(|dispatch| dispatch.exit(local_id));
                 }
+                self.current_execution.entered_span_ids.remove(&id);
             }
 
             TracingEvent::SpanCloned { id } => {
@@ -444,6 +487,7 @@ impl TracingEventReceiver {
                 span.ref_count -= 1;
                 if span.ref_count == 0 {
                     self.spans.inner.remove(&id);
+                    self.current_execution.remove_span(id);
                     if let Some(local_id) = self.local_spans.inner.remove(&id) {
                         Self::dispatch(|dispatch| dispatch.try_close(local_id.clone()));
                     }
@@ -510,7 +554,17 @@ impl TracingEventReceiver {
     }
 
     /// Returns persisted and local spans.
-    pub fn persist(self) -> (PersistedSpans, LocalSpans) {
-        (self.spans, self.local_spans)
+    pub fn persist(mut self) -> (PersistedSpans, LocalSpans) {
+        self.current_execution.uncommitted_span_ids.clear();
+        let spans = mem::take(&mut self.spans);
+        let local_spans = mem::take(&mut self.local_spans);
+        self.current_execution.finalize(&local_spans);
+        (spans, local_spans)
+    }
+}
+
+impl Drop for TracingEventReceiver {
+    fn drop(&mut self) {
+        self.current_execution.finalize(&self.local_spans);
     }
 }

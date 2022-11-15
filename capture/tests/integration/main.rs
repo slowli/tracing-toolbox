@@ -131,6 +131,73 @@ fn recorded_span_values_are_restored() {
     assert_eq!(event["message"].as_str(), Some("test"));
 }
 
+// This is also a `TracingEventReceiver` test.
+#[test]
+fn spans_are_exited_on_receiver_drop() {
+    let events = [
+        TracingEvent::NewCallSite {
+            id: 0,
+            data: CallSiteData {
+                fields: vec!["i".into()],
+                ..CALL_SITE_DATA
+            },
+        },
+        TracingEvent::NewSpan {
+            id: 0,
+            parent_id: None,
+            metadata_id: 0,
+            values: TracedValues::new(),
+        },
+        TracingEvent::SpanEntered { id: 0 },
+    ];
+
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let mut receiver = TracingEventReceiver::default();
+    for event in events {
+        receiver.receive(event);
+    }
+    let metadata = receiver.persist_metadata();
+    let (spans, local_spans) = receiver.persist();
+
+    {
+        let storage = storage.lock();
+        let span = storage.all_spans().next().unwrap();
+        assert_eq!(span.stats().entered, 1);
+        assert_eq!(span.stats().exited, 1); // <<< force-exited on receiver drop
+        assert!(!span.stats().is_closed);
+    }
+
+    let more_events = [
+        TracingEvent::NewSpan {
+            id: 1,
+            parent_id: None,
+            metadata_id: 0,
+            values: TracedValues::new(),
+        },
+        TracingEvent::SpanEntered { id: 1 },
+        TracingEvent::SpanEntered { id: 0 },
+    ];
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
+    for event in more_events {
+        receiver.receive(event);
+    }
+    drop(receiver); // discard the execution
+
+    let storage = storage.lock();
+    let spans: Vec<_> = storage.all_spans().collect();
+    assert_eq!(spans.len(), 2, "{spans:?}");
+    assert_eq!(spans[0].stats().entered, 2);
+    assert_eq!(spans[0].stats().exited, 2); // <<< force-exited on receiver drop
+    assert!(!spans[0].stats().is_closed);
+    assert_eq!(spans[1].stats().entered, 1);
+    assert_eq!(spans[1].stats().exited, 1); // <<< force-exited on receiver drop
+    assert!(spans[1].stats().is_closed);
+    // ^ auto-closed since the span is created by the discarded execution
+}
+
 #[test]
 fn capturing_spans_directly() {
     let storage = SharedStorage::default();
