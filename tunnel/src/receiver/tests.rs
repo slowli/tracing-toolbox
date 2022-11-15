@@ -35,16 +35,12 @@ fn duplicate_call_site_definitions_are_allowed() {
         },
     ];
 
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut receiver =
-        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::default();
     for event in events {
         receiver.receive(event);
     }
 
-    let mut metadata = PersistedMetadata::default();
-    receiver.persist_metadata(&mut metadata);
+    let metadata = receiver.persist_metadata();
     assert_eq!(metadata.inner.len(), 1);
 }
 
@@ -56,10 +52,7 @@ fn unknown_metadata_error() {
         metadata_id: 0,
         values: TracedValues::new(),
     };
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut receiver =
-        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::default();
     let err = receiver.try_receive(event).unwrap_err();
     assert_matches!(err, ReceiveError::UnknownMetadataId(0));
 }
@@ -87,10 +80,7 @@ fn unknown_span_errors() {
         },
     ];
 
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut receiver =
-        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::default();
     receiver.receive(TracingEvent::NewCallSite {
         id: 0,
         data: CALL_SITE_DATA,
@@ -106,10 +96,7 @@ fn spans_with_allowed_value_lengths() {
     for values_len in 0..=32 {
         println!("values length: {values_len}");
 
-        let mut spans = PersistedSpans::default();
-        let mut local_spans = LocalSpans::default();
-        let mut receiver =
-            TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+        let mut receiver = TracingEventReceiver::default();
         let fields = (0..values_len)
             .map(|i| Cow::Owned(format!("field{i}")))
             .collect();
@@ -133,10 +120,7 @@ fn spans_with_allowed_value_lengths() {
 
 #[test]
 fn too_many_values_error() {
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut receiver =
-        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::default();
     receiver.receive(TracingEvent::NewCallSite {
         id: 0,
         data: CALL_SITE_DATA,
@@ -176,10 +160,7 @@ fn receiver_does_not_panic_on_bogus_field() {
         },
     ];
 
-    let mut spans = PersistedSpans::default();
-    let mut local_spans = LocalSpans::default();
-    let mut receiver =
-        TracingEventReceiver::new(PersistedMetadata::default(), &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::default();
     for event in events {
         receiver.receive(event);
     }
@@ -190,7 +171,7 @@ fn restoring_spans() {
     let metadata = PersistedMetadata {
         inner: HashMap::from_iter([(0, CALL_SITE_DATA)]),
     };
-    let mut spans = PersistedSpans {
+    let spans = PersistedSpans {
         inner: HashMap::from_iter([(
             1,
             SpanData {
@@ -201,13 +182,13 @@ fn restoring_spans() {
             },
         )]),
     };
-    let mut local_spans = LocalSpans::default();
+    let local_spans = LocalSpans::default();
 
-    let mut receiver = TracingEventReceiver::new(metadata, &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
     visit_and_drop_span(&mut receiver);
 }
 
-fn visit_and_drop_span(receiver: &mut TracingEventReceiver<'_>) {
+fn visit_and_drop_span(receiver: &mut TracingEventReceiver) {
     receiver.receive(TracingEvent::SpanEntered { id: 1 });
     assert!(receiver.local_spans.inner.contains_key(&1));
 
@@ -223,7 +204,7 @@ fn restoring_span_after_recording_values() {
     let metadata = PersistedMetadata {
         inner: HashMap::from_iter([(0, call_site)]),
     };
-    let mut spans = PersistedSpans {
+    let spans = PersistedSpans {
         inner: HashMap::from_iter([(
             1,
             SpanData {
@@ -234,9 +215,9 @@ fn restoring_span_after_recording_values() {
             },
         )]),
     };
-    let mut local_spans = LocalSpans::default();
+    let local_spans = LocalSpans::default();
 
-    let mut receiver = TracingEventReceiver::new(metadata, &mut spans, &mut local_spans);
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
     receiver.receive(TracingEvent::ValuesRecorded {
         id: 1,
         values: TracedValues::from_iter([("i".to_owned(), TracedValue::from(42_i64))]),

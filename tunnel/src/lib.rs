@@ -126,11 +126,7 @@
 //! let mut spans = PersistedSpans::default();
 //! let mut local_spans = LocalSpans::default();
 //! // Replay `events` using the default subscriber.
-//! let mut receiver = TracingEventReceiver::new(
-//!     PersistedMetadata::default(),
-//!     &mut spans,
-//!     &mut local_spans,
-//! );
+//! let mut receiver = TracingEventReceiver::default();
 //! for event in events {
 //!     if let Err(err) = receiver.try_receive(event) {
 //!         tracing::warn!(%err, "received invalid tracing event");
@@ -138,8 +134,8 @@
 //! }
 //! // Persist the resulting receiver state. There are two pieces
 //! // of the state: metadata and alive spans.
-//! let mut metadata = PersistedMetadata::default();
-//! receiver.persist_metadata(&mut metadata);
+//! let metadata = receiver.persist_metadata();
+//! let (spans, local_spans) = receiver.persist();
 //! // `metadata` can be shared among multiple executions of the same executable
 //! // (e.g., a WASM module).
 //! // `spans` and `local_spans` are specific to the execution; `spans` should
