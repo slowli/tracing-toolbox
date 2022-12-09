@@ -21,8 +21,8 @@ across an API boundary:
 
 This solves the problem of having *dynamic* call sites for tracing spans / events, 
 i.e., ones not known during compilation. This may occur if call sites
-are defined in dynamically loaded modules, the execution of which is embedded into the program,
-e.g., WASM modules.
+are defined in dynamically loaded modules the execution of which is embedded into the program,
+such as WASM modules.
 
 See the crate docs for the details about the crate design and potential use cases.
 
@@ -87,7 +87,7 @@ fn replay_events(events: &[TracingEvent]) {
     let metadata = receiver.persist_metadata();
     let (spans, local_spans) = receiver.persist();
     // Store `metadata` and `spans`, e.g., in a DB, and `local_spans`
-    // in a local data struct such as `HashMap`.
+    // in a local data struct such as `HashMap` keyed by the executable ID.
 }
 ```
 
