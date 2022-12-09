@@ -13,7 +13,7 @@ use tracing_subscriber::{
 
 use std::{
     fmt, ops,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 use crate::{
@@ -149,13 +149,13 @@ impl Storage {
 /// Shared wrapper for tracing [`Storage`].
 #[derive(Debug, Clone)]
 pub struct SharedStorage {
-    inner: Arc<Mutex<Storage>>,
+    inner: Arc<RwLock<Storage>>,
 }
 
 impl Default for SharedStorage {
     fn default() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(Storage::new())),
+            inner: Arc::new(RwLock::new(Storage::new())),
         }
     }
 }
@@ -165,7 +165,9 @@ impl SharedStorage {
     /// Locks the underlying [`Storage`] for exclusive access. While the lock is held,
     /// capturing cannot progress; beware of deadlocks!
     pub fn lock(&self) -> impl ops::Deref<Target = Storage> + '_ {
-        self.inner.lock().unwrap()
+        self.inner
+            .read()
+            .expect("failed accessing shared tracing data storage")
     }
 }
 
@@ -185,7 +187,7 @@ impl SharedStorage {
 /// See [crate-level docs](index.html) for an example of usage.
 pub struct CaptureLayer<S> {
     filter: Option<Box<dyn Filter<S> + Send + Sync>>,
-    storage: Arc<Mutex<Storage>>,
+    storage: Arc<RwLock<Storage>>,
 }
 
 impl<S> fmt::Debug for CaptureLayer<S> {
@@ -232,7 +234,9 @@ where
     }
 
     fn lock(&self) -> impl ops::DerefMut<Target = Storage> + '_ {
-        self.storage.lock().unwrap()
+        self.storage
+            .write()
+            .expect("failed locking shared tracing data storage for write")
     }
 }
 

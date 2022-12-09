@@ -2,6 +2,7 @@
 name = "tracing-tunnel"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.60"
 authors = ["Alex Ostrovski <ostrovski.alex@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -19,14 +20,16 @@ rustdoc-args = ["--cfg", "docsrs"]
 maintenance = { status = "experimental" }
 
 [dependencies]
-once_cell = { version = "1.15.0", optional = true }
+# Public dependencies (present in the public API of the crate).
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 tracing-core = { version = "0.1.30", default-features = false }
+# Private dependencies.
+once_cell = { version = "1.16.0", optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 doc-comment = "0.3.3"
-insta = { version = "1.21.0", features = ["yaml"] }
+insta = { version = "1.22.0", features = ["yaml"] }
 serde_json = "1"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["registry", "fmt"] }

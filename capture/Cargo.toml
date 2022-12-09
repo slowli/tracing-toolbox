@@ -2,28 +2,26 @@
 name = "tracing-capture"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.60"
 authors = ["Alex Ostrovski <ostrovski.alex@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["tracing", "testing", "assertion", "predicate"]
 categories = ["development-tools::testing", "development-tools::debugging"]
-description = "Tracing infrastructure for Tardigrade workflows"
+description = "Capturing tracing spans and events, e.g. for testing"
 repository = "https://github.com/slowli/tracing-toolbox"
 
 [badges]
 maintenance = { status = "experimental" }
 
 [dependencies]
-id-arena = "2.2.1"
-predicates = { version = "2.1.1", default-features = false }
+# Public dependencies (present in the public API of the crate).
+predicates = { version = "2.1.4", default-features = false }
 tracing-core = "0.1.30"
-
+tracing-subscriber = { version = "0.3.16", default-features = false, features = ["std", "registry"] }
+# Private dependencies.
+id-arena = "2.2.1"
 tracing-tunnel = { version = "0.1.0", path = "../tunnel" }
-
-[dependencies.tracing-subscriber]
-version = "0.3.16"
-default-features = false
-features = ["std", "registry"]
 
 [dev-dependencies]
 assert_matches = "1.5.0"
@@ -31,5 +29,4 @@ doc-comment = "0.3.3"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["fmt"] }
 version-sync = "0.9.4"
-
 tracing-tunnel = { version = "0.1.0", path = "../tunnel", features = ["sender", "receiver"] }

@@ -5,7 +5,7 @@ use predicates::ord::eq;
 use tracing_core::{Level, LevelFilter};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
-use std::borrow::Cow;
+use std::{borrow::Cow, panic};
 
 mod fib;
 
@@ -452,4 +452,26 @@ fn explicit_parent_is_correctly_handled() {
     let child_span = events.next().unwrap().parent().unwrap();
     assert_eq!(child_span.metadata().name(), "child");
     assert_eq!(child_span.parent(), Some(event_parent));
+}
+
+#[test]
+fn failed_assertion_while_storage_is_locked() {
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let panic_result = panic::catch_unwind(|| {
+        tracing::info_span!("_").in_scope(|| {
+            tracing::info!("hello, world!");
+            let storage = storage.lock();
+            assert_eq!(storage.all_events().len(), 2, "Huh?"); // fails
+        });
+    });
+    let err = panic_result.unwrap_err();
+    let err = err.downcast_ref::<String>().unwrap();
+    assert!(err.contains("Huh?"), "{err}");
+
+    // Check that the `Storage` is not poisoned.
+    let storage = storage.lock();
+    assert_eq!(storage.all_events().len(), 1);
 }
