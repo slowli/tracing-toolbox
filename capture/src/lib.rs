@@ -62,7 +62,7 @@
 
 use tracing_core::Metadata;
 
-use std::{cmp, ops, ptr};
+use std::{cmp, fmt, ops, ptr};
 
 mod iter;
 mod layer;
@@ -123,10 +123,16 @@ type CapturedEventId = id_arena::Id<CapturedEventInner>;
 ///     .any(|span| span.metadata().name() == "test"));
 /// # }
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct CapturedEvent<'a> {
     inner: &'a CapturedEventInner,
     storage: &'a Storage,
+}
+
+impl fmt::Debug for CapturedEvent<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, formatter)
+    }
 }
 
 impl<'a> CapturedEvent<'a> {
@@ -262,10 +268,16 @@ type CapturedSpanId = id_arena::Id<CapturedSpanInner>;
 ///     span.descendants().find(|span| span["input"] == "!").unwrap();
 /// # }
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct CapturedSpan<'a> {
     inner: &'a CapturedSpanInner,
     storage: &'a Storage,
+}
+
+impl fmt::Debug for CapturedSpan<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, formatter)
+    }
 }
 
 impl<'a> CapturedSpan<'a> {
