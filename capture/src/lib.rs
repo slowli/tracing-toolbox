@@ -330,8 +330,10 @@ impl<'a> CapturedSpan<'a> {
         DescendantSpans::new(self)
     }
 
-    /// Iterates over the descendant [events](CapturedEvent) of this span. The iteration order
-    /// is not specified.
+    /// Iterates over the [events](CapturedEvent) of the [descendants](Self::descendants())
+    /// of this span. The iteration order is not specified. The returned events do not include
+    /// the events [directly attached](Self::events()) to this span; if you need them to be included,
+    /// use something like `span.events().chain(span.descendant_events())`.
     pub fn descendant_events(&self) -> DescendantEvents<'a> {
         DescendantEvents::new(self)
     }

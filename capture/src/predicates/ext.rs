@@ -4,9 +4,7 @@ use predicates::Predicate;
 
 use std::fmt;
 
-use crate::{
-    CapturedEvents, CapturedSpan, CapturedSpans, DescendantEvents, DescendantSpans, Storage,
-};
+use crate::{CapturedEvent, CapturedEvents, CapturedSpan, CapturedSpans, DescendantSpans, Storage};
 
 /// Helper to wrap holders of [`CapturedSpan`]s or [`CapturedEvent`]s
 /// (spans or the underlying [`Storage`]) so that they are more convenient to use with `Predicate`s.
@@ -54,8 +52,8 @@ impl<'a> CapturedSpan<'a> {
     }
 
     /// Deeply scans all descendant events of this span.
-    pub fn deep_scan_events(self) -> Scanner<Self, DescendantEvents<'a>> {
-        Scanner::new(self, |span| span.descendant_events())
+    pub fn deep_scan_events(self) -> Scanner<Self, impl Iterator<Item = CapturedEvent<'a>> + 'a> {
+        Scanner::new(self, |span| span.events().chain(span.descendant_events()))
     }
 }
 
