@@ -5,7 +5,7 @@
 ![rust 1.60+ required](https://img.shields.io/badge/rust-1.60+-blue.svg?label=Required%20Rust)
 ![no_std tested](https://img.shields.io/badge/no__std-tested-green.svg)
 
-**Documentation:**
+**Documentation:** [![Docs.rs](https://docs.rs/tracing-tunnel/badge.svg)](https://docs.rs/tracing-tunnel/)
 [![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://slowli.github.io/tracing-toolbox/tracing_tunnel/)
 
 This crate provides [tracing] infrastructure helpers allowing to transfer tracing events
