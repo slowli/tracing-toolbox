@@ -62,7 +62,7 @@
 
 use tracing_core::Metadata;
 
-use std::{cmp, ops, ptr};
+use std::{cmp, fmt, ops, ptr};
 
 mod iter;
 mod layer;
@@ -123,10 +123,16 @@ type CapturedEventId = id_arena::Id<CapturedEventInner>;
 ///     .any(|span| span.metadata().name() == "test"));
 /// # }
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct CapturedEvent<'a> {
     inner: &'a CapturedEventInner,
     storage: &'a Storage,
+}
+
+impl fmt::Debug for CapturedEvent<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, formatter)
+    }
 }
 
 impl<'a> CapturedEvent<'a> {
@@ -262,10 +268,16 @@ type CapturedSpanId = id_arena::Id<CapturedSpanInner>;
 ///     span.descendants().find(|span| span["input"] == "!").unwrap();
 /// # }
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct CapturedSpan<'a> {
     inner: &'a CapturedSpanInner,
     storage: &'a Storage,
+}
+
+impl fmt::Debug for CapturedSpan<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, formatter)
+    }
 }
 
 impl<'a> CapturedSpan<'a> {
@@ -318,8 +330,10 @@ impl<'a> CapturedSpan<'a> {
         DescendantSpans::new(self)
     }
 
-    /// Iterates over the descendant [events](CapturedEvent) of this span. The iteration order
-    /// is not specified.
+    /// Iterates over the [events](CapturedEvent) of the [descendants](Self::descendants())
+    /// of this span. The iteration order is not specified. The returned events do not include
+    /// the events [directly attached](Self::events()) to this span; if you need them to be included,
+    /// use something like `span.events().chain(span.descendant_events())`.
     pub fn descendant_events(&self) -> DescendantEvents<'a> {
         DescendantEvents::new(self)
     }

@@ -282,6 +282,9 @@ fn capturing_events_with_indirect_ancestor() {
     assert!(span_event.value("message").is_some());
     assert_eq!(span_event["value"], 5_i64);
 
+    assert!(span.descendant_events().next().is_none());
+    span.deep_scan_events().first(&field("value", 5_i64));
+
     let mut root_events = storage.root_events();
     assert_eq!(root_events.len(), 1);
     let root_event = root_events.next().unwrap();

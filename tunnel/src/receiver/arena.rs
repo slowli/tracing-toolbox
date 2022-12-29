@@ -71,7 +71,7 @@ impl Arena {
     }
 
     fn new_call_site() -> &'static DynamicCallSite {
-        let call_site = Box::new(DynamicCallSite::default());
+        let call_site = Box::default();
         Box::leak(call_site)
     }
 
