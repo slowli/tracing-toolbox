@@ -1,0 +1,180 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `capture/src/predicates/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../../tracing_capture/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div></a><h2 class="location"></h2></nav><nav class="sidebar"><a class="sidebar-logo" href="../../../tracing_capture/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../tracing_capture/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+</pre><pre class="rust"><code><span class="doccomment">//! Predicates for [`CapturedSpan`]s and [`CapturedEvent`]s.
+//!
+//! # Overview
+//!
+//! A predicate can be created with the functions from this module:
+//!
+//! - [`level()`] checks the span / event level
+//! - [`name()`] checks the span name
+//! - [`target()`] checks the span / event target
+//! - [`field()`] checks a specific span / event field
+//! - [`message()`] checks the event message
+//! - [`parent()`] checks the direct parent span of an event / span
+//! - [`ancestor()`] checks the ancestor spans of an event / span
+//!
+//! These predicates can be combined with bitwise operators, `&amp;` and `|`.
+//! The [`ScanExt`] trait may be used to simplify assertions with predicates. The remaining
+//! traits and structs are lower-level plumbing and rarely need to be used directly.
+//!
+//! [`CapturedSpan`]: crate::CapturedSpan
+//! [`CapturedEvent`]: crate::CapturedEvent
+//!
+//! # Examples
+//!
+//! ```
+//! # use tracing_core::Level;
+//! # use predicates::ord::eq;
+//! # use tracing_capture::{predicates::*, Storage};
+//! # fn test_wrapper(storage: &amp;Storage) {
+//! // Predicates can be combined using bitwise operators:
+//! let predicate = target([eq(&quot;tracing&quot;)])
+//!     &amp; name(eq(&quot;test_capture&quot;))
+//!     &amp; level(Level::INFO)
+//!     &amp; field(&quot;result&quot;, 42_i64);
+//! // The resulting predicate can be used with `CapturedExt` trait.
+//! let storage: &amp;Storage = // ...
+//! #   storage;
+//! let _ = storage.scan_spans().first(&amp;predicate);
+//! let _ = storage.scan_events().single(&amp;level(Level::ERROR));
+//!
+//! // ...or converted back to a closure:
+//! let _ = storage.all_spans().filter(into_fn(predicate));
+//! # }
+//! ```
+
+</span><span class="kw">use </span>predicates::Predicate;
+
+<span class="attribute">#[macro_use]
+</span><span class="kw">mod </span>combinators;
+<span class="kw">mod </span>ext;
+<span class="kw">mod </span>field;
+<span class="kw">mod </span>level;
+<span class="kw">mod </span>name;
+<span class="kw">mod </span>parent;
+<span class="kw">mod </span>target;
+
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests;
+
+<span class="kw">pub use </span><span class="self">self</span>::{
+    combinators::{And, Or},
+    ext::{ScanExt, Scanner},
+    field::{
+        field, message, value, FieldPredicate, IntoFieldPredicate, MessagePredicate, ValuePredicate,
+    },
+    level::{level, IntoLevelPredicate, LevelPredicate},
+    name::{name, NamePredicate},
+    parent::{ancestor, parent, AncestorPredicate, ParentPredicate},
+    target::{target, IntoTargetPredicate, TargetPredicate},
+};
+
+<span class="doccomment">/// Converts a predicate into an `Fn(_) -&gt; bool` closure.
+///
+/// This can be used in APIs (e.g., [`Iterator`] combinators) that expect a closure
+/// as an argument.
+///
+/// # Examples
+///
+/// ```
+/// # use tracing_core::Level;
+/// # use tracing_capture::{predicates::*, CapturedEvent};
+/// let predicate = into_fn(target(&quot;tracing&quot;) &amp; level(Level::INFO));
+/// let events: &amp;[CapturedEvent] = // ...
+/// #   &amp;[];
+/// let matching_events = events.iter().copied().filter(predicate);
+/// // Do something with `matching_events`...
+/// ```
+</span><span class="kw">pub fn </span>into_fn&lt;Item&gt;(predicate: <span class="kw">impl </span>Predicate&lt;Item&gt;) -&gt; <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>Item) -&gt; bool {
+    <span class="kw">move </span>|variable| predicate.eval(variable)
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="tracing_capture" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9062b780b 2022-09-21)" ></div></body></html>

@@ -1,0 +1,390 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `tunnel/src/receiver/arena.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>arena.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../../tracing_tunnel/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div></a><h2 class="location"></h2></nav><nav class="sidebar"><a class="sidebar-logo" href="../../../tracing_tunnel/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../tracing_tunnel/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+</pre><pre class="rust"><code><span class="doccomment">//! Simple string arena.
+
+</span><span class="kw">use </span>once_cell::sync::{Lazy, OnceCell};
+<span class="kw">use </span>tracing_core::{field::FieldSet, Callsite, Interest, Kind, Level, Metadata};
+
+<span class="kw">use </span>std::{
+    borrow::Cow,
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    hash::{Hash, Hasher},
+    ops,
+    sync::RwLock,
+};
+
+<span class="kw">use </span><span class="kw">crate</span>::types::{CallSiteData, CallSiteKind, TracingLevel};
+
+<span class="comment">// An emulation of a hash map with keys equivalent to `CallSiteData` (obviously,
+// we don&#39;t want to store `CallSiteData` explicitly because of its size).
+</span><span class="kw">type </span>MetadataMap = HashMap&lt;u64, Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>Metadata&lt;<span class="lifetime">&#39;static</span>&gt;&gt;&gt;;
+
+<span class="kw">impl </span>From&lt;TracingLevel&gt; <span class="kw">for </span>Level {
+    <span class="kw">fn </span>from(level: TracingLevel) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>level {
+            TracingLevel::Error =&gt; <span class="self">Self</span>::ERROR,
+            TracingLevel::Warn =&gt; <span class="self">Self</span>::WARN,
+            TracingLevel::Info =&gt; <span class="self">Self</span>::INFO,
+            TracingLevel::Debug =&gt; <span class="self">Self</span>::DEBUG,
+            TracingLevel::Trace =&gt; <span class="self">Self</span>::TRACE,
+        }
+    }
+}
+
+<span class="kw">impl </span>From&lt;CallSiteKind&gt; <span class="kw">for </span>Kind {
+    <span class="kw">fn </span>from(kind: CallSiteKind) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>kind {
+            CallSiteKind::Span =&gt; <span class="self">Self</span>::SPAN,
+            CallSiteKind::Event =&gt; <span class="self">Self</span>::EVENT,
+        }
+    }
+}
+
+<span class="attribute">#[derive(Debug, Default)]
+</span><span class="kw">struct </span>DynamicCallSite {
+    metadata: OnceCell&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>Metadata&lt;<span class="lifetime">&#39;static</span>&gt;&gt;,
+}
+
+<span class="kw">impl </span>Callsite <span class="kw">for </span>DynamicCallSite {
+    <span class="kw">fn </span>set_interest(<span class="kw-2">&amp;</span><span class="self">self</span>, _interest: Interest) {
+        <span class="comment">// Does nothing
+    </span>}
+
+    <span class="kw">fn </span>metadata(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Metadata&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="self">self</span>.metadata
+            .get()
+            .copied()
+            .expect(<span class="string">&quot;metadata not initialized&quot;</span>)
+    }
+}
+
+<span class="attribute">#[derive(Debug, Default)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Arena {
+    strings: RwLock&lt;HashSet&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt;&gt;,
+    metadata: RwLock&lt;MetadataMap&gt;,
+}
+
+<span class="kw">impl </span>Arena {
+    <span class="kw">fn </span>leak(s: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
+        <span class="kw">match </span>s {
+            Cow::Borrowed(s) =&gt; s,
+            Cow::Owned(string) =&gt; Box::leak(string.into_boxed_str()),
+        }
+    }
+
+    <span class="kw">fn </span>new_call_site() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>DynamicCallSite {
+        <span class="kw">let </span>call_site = Box::default();
+        Box::leak(call_site)
+    }
+
+    <span class="kw">fn </span>lock_strings(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>ops::Deref&lt;Target = HashSet&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt;&gt; + <span class="lifetime">&#39;_ </span>{
+        <span class="self">self</span>.strings.read().unwrap()
+    }
+
+    <span class="kw">fn </span>lock_strings_mut(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>ops::DerefMut&lt;Target = HashSet&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt;&gt; + <span class="lifetime">&#39;_ </span>{
+        <span class="self">self</span>.strings.write().unwrap()
+    }
+
+    <span class="kw">fn </span>alloc_string(<span class="kw-2">&amp;</span><span class="self">self</span>, s: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(existing) = <span class="self">self</span>.lock_strings().get(s.as_ref()).copied() {
+            <span class="kw">return </span>existing;
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.lock_strings_mut();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(existing) = lock.get(s.as_ref()).copied() {
+            <span class="kw">return </span>existing;
+        }
+        <span class="kw">let </span>leaked = <span class="self">Self</span>::leak(s);
+        lock.insert(leaked);
+        leaked
+    }
+
+    <span class="kw">fn </span>leak_fields(<span class="kw-2">&amp;</span><span class="self">self</span>, fields: Vec&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str] {
+        <span class="kw">let </span>fields: Box&lt;[<span class="kw">_</span>]&gt; = fields
+            .into_iter()
+            .map(|field| <span class="self">self</span>.alloc_string(field))
+            .collect();
+        Box::leak(fields)
+    }
+
+    <span class="kw">fn </span>leak_metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, data: CallSiteData) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>Metadata&lt;<span class="lifetime">&#39;static</span>&gt; {
+        <span class="kw">let </span>call_site = <span class="self">Self</span>::new_call_site();
+        <span class="kw">let </span>call_site_id = <span class="macro">tracing_core::identify_callsite!</span>(call_site);
+        <span class="kw">let </span>fields = FieldSet::new(<span class="self">self</span>.leak_fields(data.fields), call_site_id);
+        <span class="kw">let </span>metadata = Metadata::new(
+            <span class="self">self</span>.alloc_string(data.name),
+            <span class="self">self</span>.alloc_string(data.target),
+            data.level.into(),
+            data.file.map(|file| <span class="self">self</span>.alloc_string(file)),
+            data.line,
+            data.module_path.map(|path| <span class="self">self</span>.alloc_string(path)),
+            fields,
+            data.kind.into(),
+        );
+
+        <span class="kw">let </span>metadata = Box::leak(Box::new(metadata)) <span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">_</span>;
+        call_site.metadata.set(metadata).unwrap();
+        metadata
+    }
+
+    <span class="kw">fn </span>lock_metadata(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>ops::Deref&lt;Target = MetadataMap&gt; + <span class="lifetime">&#39;_ </span>{
+        <span class="self">self</span>.metadata.read().unwrap()
+    }
+
+    <span class="kw">fn </span>lock_metadata_mut(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>ops::DerefMut&lt;Target = MetadataMap&gt; + <span class="lifetime">&#39;_ </span>{
+        <span class="self">self</span>.metadata.write().unwrap()
+    }
+
+    <span class="doccomment">/// Returns the metadata and a flag whether it was allocated in this call.
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>alloc_metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, data: CallSiteData) -&gt; (<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>Metadata&lt;<span class="lifetime">&#39;static</span>&gt;, bool) {
+        <span class="kw">let </span>hash_value = <span class="self">Self</span>::hash_metadata(<span class="kw-2">&amp;</span>data);
+        <span class="kw">let </span>scanned_bucket_len = {
+            <span class="kw">let </span>lock = <span class="self">self</span>.lock_metadata();
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(bucket) = lock.get(<span class="kw-2">&amp;</span>hash_value) {
+                <span class="kw">for </span><span class="kw-2">&amp;</span>metadata <span class="kw">in </span>bucket {
+                    <span class="kw">if </span><span class="self">Self</span>::eq_metadata(<span class="kw-2">&amp;</span>data, metadata) {
+                        <span class="kw">return </span>(metadata, <span class="bool-val">false</span>);
+                    }
+                }
+                bucket.len()
+            } <span class="kw">else </span>{
+                <span class="number">0
+            </span>}
+        };
+
+        <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.lock_metadata_mut();
+        <span class="kw">let </span>bucket = lock.entry(hash_value).or_default();
+        <span class="kw">for </span><span class="kw-2">&amp;</span>metadata <span class="kw">in </span><span class="kw-2">&amp;</span>bucket[scanned_bucket_len..] {
+            <span class="kw">if </span><span class="self">Self</span>::eq_metadata(<span class="kw-2">&amp;</span>data, metadata) {
+                <span class="kw">return </span>(metadata, <span class="bool-val">false</span>);
+            }
+        }
+
+        <span class="comment">// Finally, we need to actually leak metadata.
+        </span><span class="kw">let </span>metadata = <span class="self">self</span>.leak_metadata(data);
+        bucket.push(metadata);
+        (metadata, <span class="bool-val">true</span>)
+    }
+
+    <span class="comment">// The returned hash doesn&#39;t necessarily match the hash of `Metadata`, but it is the same
+    // for the equivalent `(kind, data)` tuples, which is what we need.
+    </span><span class="kw">fn </span>hash_metadata(data: <span class="kw-2">&amp;</span>CallSiteData) -&gt; u64 {
+        <span class="kw">let </span><span class="kw-2">mut </span>hasher = DefaultHasher::new();
+        data.hash(<span class="kw-2">&amp;mut </span>hasher);
+        hasher.finish()
+    }
+
+    <span class="kw">fn </span>eq_metadata(data: <span class="kw-2">&amp;</span>CallSiteData, metadata: <span class="kw-2">&amp;</span>Metadata&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; bool {
+        <span class="comment">// number comparisons go first
+        </span><span class="macro">matches!</span>(data.kind, CallSiteKind::Span) == metadata.is_span()
+            &amp;&amp; Level::from(data.level) == <span class="kw-2">*</span>metadata.level()
+            &amp;&amp; data.line == metadata.line()
+            <span class="comment">// ...then, string comparisons
+            </span>&amp;&amp; data.name == metadata.name()
+            &amp;&amp; data.target == metadata.target()
+            &amp;&amp; data.module_path.as_ref().map(Cow::as_ref) == metadata.module_path()
+            &amp;&amp; data.file.as_ref().map(Cow::as_ref) == metadata.file()
+            <span class="comment">// ...and finally, comparison of fields
+            </span>&amp;&amp; data
+                .fields
+                .iter()
+                .map(Cow::as_ref)
+                .eq(metadata.fields().iter().map(|field| field.name()))
+    }
+}
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>ARENA: Lazy&lt;Arena&gt; = Lazy::new(Arena::default);
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="tracing_tunnel" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9062b780b 2022-09-21)" ></div></body></html>
