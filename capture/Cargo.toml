@@ -2,7 +2,7 @@
 name = "tracing-capture"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.64"
 authors = ["Alex Ostrovski <ostrovski.alex@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -16,7 +16,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 # Public dependencies (present in the public API of the crate).
-predicates = { version = "2.1.4", default-features = false }
+predicates = { version = "3.0.1", default-features = false }
 tracing-core = "0.1.30"
 tracing-subscriber = { version = "0.3.16", default-features = false, features = ["std", "registry"] }
 # Private dependencies.
