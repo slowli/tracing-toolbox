@@ -5,6 +5,11 @@ The project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- Update `predicates` dependency.
+- Bump minimum supported Rust version to 1.64.
+
 ### Fixed
 
 - Fix `CapturedSpan::deep_scan_events()`. Previously, the scanner returned by this method
