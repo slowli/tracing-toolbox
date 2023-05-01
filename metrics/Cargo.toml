@@ -15,3 +15,8 @@ repository = "https://github.com/slowli/tracing-toolbox"
 metrics = "0.21.0"
 thread_local = "1.1.7"
 tracing = "0.1.37"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.16", features = ["fmt"] }
+
+tracing-capture = { version = "0.1.0", path = "../capture" }
