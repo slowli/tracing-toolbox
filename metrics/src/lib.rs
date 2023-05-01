@@ -1,3 +1,21 @@
+//! [Metrics] recorder that outputs metric updates as [tracing] events.
+//!
+//! This recorder is mostly useful for debugging and testing purposes. It allows
+//! outputting structured logs for the metrics produced by the application
+//! (with tracing spans for context and other good stuff). The produced tracing events
+//! can also be captured using the [`tracing-capture`] crate and tested.
+//! The `tracing-capture` crate provides dedicated support to "parse" metrics
+//! from the tracing events; see its docs for details.
+//!
+//! [Metrics]: https://docs.rs/metrics/
+//! [tracing]: https://docs.rs/tracing/
+//! [`tracing-capture`]: https://docs.rs/tracing-capture/
+
+// Linter settings.
+#![warn(missing_debug_implementations, missing_docs, bare_trait_objects)]
+#![warn(clippy::all, clippy::pedantic)]
+#![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
+
 use metrics::{
     Counter, CounterFn, Gauge, GaugeFn, Histogram, HistogramFn, Key, KeyName, Label, Recorder,
     SetRecorderError, SharedString, Unit,
@@ -11,7 +29,7 @@ use std::{
     hash::Hash,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, RwLock,
+        Arc, Mutex, MutexGuard, PoisonError, RwLock,
     },
 };
 
@@ -204,7 +222,9 @@ impl HistogramFn for MetricData {
 
 type MetricDataMaps = MetricMaps<Key, Arc<MetricData>>;
 
-/// Base of the metrics recorder.
+/// Base of the metrics recorder. The `Arc`s and `RwLock`s used within are redundant for
+/// per-thread recorder implementation, but since `RwLock`s are not contested, their overhead
+/// should be fairly low.
 #[derive(Debug, Default)]
 struct RecorderBase {
     metadata: Arc<RwLock<MetricMetadataMaps>>,
@@ -233,6 +253,13 @@ impl RecorderBase {
             metrics.insert(kind, key.clone(), Arc::clone(&metric));
             metric
         }
+    }
+
+    fn clear(&self) {
+        let mut metrics = self.metrics.write().expect("metrics lock poisoned");
+        *metrics = MetricDataMaps::default();
+        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
+        *metadata = MetricMetadataMaps::default();
     }
 }
 
@@ -283,24 +310,67 @@ enum Inner {
     PerThread(Box<ThreadLocal<RecorderBase>>),
 }
 
+/// Metrics recorder that outputs metric updates as [tracing] events.
+///
+/// # How to install
+///
+/// In the debugging use case, you may want to use [`Self::global()`]`.`[`install()`](Self::install()),
+/// which will install a recorder that will collect metrics from all threads into a single place.
+///
+/// For use in tests, you may want to instantiate the recorder with [`Self::per_thread()`] instead.
+/// Otherwise, other tests running before and/or in parallel can interfere
+/// with the gathered values. This, however, works only if tests and the tested code
+/// do not spawn additional threads which report metrics. Interference *may* be acceptable
+/// in certain conditions, e.g. if no counters are used and previous values of gauges / histograms
+/// are not checked by the test code.
+///
+/// Finally, if everything else fails, there is [`Self::install_exclusive()`]. It tracks metrics
+/// from all threads, and uses a static mutex exclusively locked on each call to ensure
+/// that there is no interference.
+///
+/// Reporter installation will fail on subsequent calls in tests. As long as all tests install
+/// the same recorder, this is fine; the installed recorder will provide tracing events for all
+/// tests.
+///
+/// [tracing]: https://docs.rs/tracing/
+#[must_use = "Created recorder should be `install()`ed"]
 #[derive(Debug)]
 pub struct TracingMetricsRecorder {
     inner: Inner,
 }
 
 impl TracingMetricsRecorder {
+    /// Creates a new recorder that tracks metrics from all threads in a single place (i.e.,
+    /// like a real-world metrics recorder).
     pub fn global() -> Self {
         Self {
             inner: Inner::Global(RecorderBase::default()),
         }
     }
 
+    /// Creates a new recorder that tracks metrics from each thread separately. This is useful
+    /// for single-threaded tests.
     pub fn per_thread() -> Self {
         Self {
             inner: Inner::PerThread(Box::new(ThreadLocal::new())),
         }
     }
 
+    /// Creates and installs a recorder that tracks metrics from all threads in a single place
+    /// (i.e., like [`Self::global()`]), and additionally exclusively locks on each call
+    /// so that different runs do not interfere with each other. This can be used
+    /// for multithreaded tests.
+    ///
+    /// # Return value
+    ///
+    /// Returns a guard that should be held until interference with metrics is a concern.
+    /// On drop, the guard will reset the recorder state; it will forget all recorded metrics
+    /// and their metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the recorder cannot be installed because another recorder is already
+    /// installed as global.
     pub fn install_exclusive() -> Result<RecorderGuard, SetRecorderError> {
         static GLOBAL: Mutex<Option<&'static TracingMetricsRecorder>> = Mutex::new(None);
 
@@ -325,6 +395,12 @@ impl TracingMetricsRecorder {
         Ok(RecorderGuard { inner: guard })
     }
 
+    /// Installs this recorder as the global recorder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the recorder cannot be installed because another recorder is already
+    /// installed as global.
     pub fn install(self) -> Result<(), SetRecorderError> {
         metrics::set_boxed_recorder(Box::new(self))
     }
