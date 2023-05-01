@@ -1,0 +1,17 @@
+[package]
+name = "tracing-metrics" # FIXME: come up with a free name
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.64"
+authors = ["Alex Ostrovski <ostrovski.alex@gmail.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["tracing", "logging", "wasm"]
+categories = ["development-tools::debugging", "development-tools::testing"]
+description = "Metrics recorder that outputs metric updates as tracing events"
+repository = "https://github.com/slowli/tracing-toolbox"
+
+[dependencies]
+metrics = "0.21.0"
+thread_local = "1.1.7"
+tracing = "0.1.37"
