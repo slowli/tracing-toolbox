@@ -53,9 +53,9 @@ impl<'a> MetricUpdateEvent<'a> {
         let metric = Metric {
             kind: MetricKind::from_str(event.value("kind")?.as_str()?)?,
             name: event.value("name")?.as_str()?,
-            unit: event.value("unit")?.as_str()?,
-            description: event.value("description")?.as_str()?,
-            labels: Self::parse_labels(event.value("labels")?.as_debug_str()?)?,
+            unit: Self::get_optional_str(event.value("unit"))?,
+            description: Self::get_optional_str(event.value("description"))?,
+            labels: Self::parse_labels(event.value("labels"))?,
         };
         let value = event.value("value")?;
         let prev_value = event.value("prev_value")?;
@@ -66,8 +66,24 @@ impl<'a> MetricUpdateEvent<'a> {
         })
     }
 
+    fn get_optional_str(value: Option<&TracedValue>) -> Option<&str> {
+        if let Some(value) = value {
+            value.as_str()
+        } else {
+            Some("")
+        }
+    }
+
     /// Parses debug presentation of labels, such as `{"stage": "init", "location": "UK"}`.
-    fn parse_labels(labels: &str) -> Option<HashMap<&str, &str>> {
+    fn parse_labels(labels: Option<&TracedValue>) -> Option<HashMap<&str, &str>> {
+        if let Some(labels) = labels {
+            Self::parse_labels_inner(labels.as_debug_str()?)
+        } else {
+            Some(HashMap::new())
+        }
+    }
+
+    fn parse_labels_inner(labels: &str) -> Option<HashMap<&str, &str>> {
         if labels.contains('\\') {
             // We don't support escape sequences yet
             return Some(HashMap::new());
@@ -117,9 +133,9 @@ mod tests {
 
     #[test]
     fn parsing_labels() {
-        let labels = MetricUpdateEvent::parse_labels("{}").unwrap();
+        let labels = MetricUpdateEvent::parse_labels_inner("{}").unwrap();
         assert!(labels.is_empty());
-        let labels = MetricUpdateEvent::parse_labels("{  }").unwrap();
+        let labels = MetricUpdateEvent::parse_labels_inner("{  }").unwrap();
         assert!(labels.is_empty());
 
         let single_label_variants = [
@@ -129,7 +145,7 @@ mod tests {
             r#"{ "stage": "init", }"#,
         ];
         for labels in single_label_variants {
-            let labels = MetricUpdateEvent::parse_labels(labels).unwrap();
+            let labels = MetricUpdateEvent::parse_labels_inner(labels).unwrap();
             assert_eq!(labels.len(), 1);
             assert_eq!(labels["stage"], "init");
         }
@@ -141,7 +157,7 @@ mod tests {
             r#"{ "stage": "init", "location": "UK", }"#,
         ];
         for labels in multi_label_variants {
-            let labels = MetricUpdateEvent::parse_labels(labels).unwrap();
+            let labels = MetricUpdateEvent::parse_labels_inner(labels).unwrap();
             assert_eq!(labels.len(), 2);
             assert_eq!(labels["stage"], "init");
             assert_eq!(labels["location"], "UK");

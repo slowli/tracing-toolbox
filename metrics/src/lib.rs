@@ -21,7 +21,7 @@ use metrics::{
     SetRecorderError, SharedString, Unit,
 };
 use thread_local::ThreadLocal;
-use tracing::field::Value;
+use tracing::field::{self, Value};
 
 use std::{
     collections::HashMap,
@@ -150,23 +150,31 @@ impl MetricData {
         let metadata = self.metadata.read().expect("metadata lock poisoned");
         let name = &self.name;
         let metadata = metadata.get(kind, name).unwrap_or(MetricMetadata::EMPTY);
-        let unit = metadata.unit.unwrap_or(Unit::Count);
-        let (unit_spacing, unit_str) = if matches!(unit, Unit::Count) {
-            ("", "")
-        } else {
-            (" ", unit.as_str())
+        let unit = metadata.unit;
+        let (unit_spacing, unit_str) = match &unit {
+            None | Some(Unit::Count) => ("", ""),
+            Some(unit) => (" ", unit.as_str()),
         };
         let kind = kind.as_str();
+        let description = metadata.description.as_ref();
 
         tracing::info!(
             target: env!("CARGO_CRATE_NAME"),
             kind,
             name,
-            labels = ?self.labels,
+            labels = if self.labels.0.is_empty() {
+                None
+            } else {
+                Some(field::debug(&self.labels))
+            },
             prev_value,
             value,
-            unit = unit.as_str(),
-            description = metadata.description.as_ref(),
+            unit = unit.as_ref().map(Unit::as_str),
+            description = if description.is_empty() {
+                None
+            } else {
+                Some(description)
+            },
             "{kind} `{name}` = {value}{unit_spacing}{unit_str}"
         );
     }
