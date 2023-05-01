@@ -301,6 +301,30 @@ impl TracingMetricsRecorder {
         }
     }
 
+    pub fn install_exclusive() -> Result<RecorderGuard, SetRecorderError> {
+        static GLOBAL: Mutex<Option<&'static TracingMetricsRecorder>> = Mutex::new(None);
+
+        let mut guard = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+        // ^ Since we only set the Mutex value once, its value cannot get corrupted.
+
+        let recorder = *guard.get_or_insert_with(|| {
+            let global = Box::new(Self::global());
+            Box::leak(global)
+        });
+
+        metrics::set_recorder(recorder).or_else(|err| {
+            let recorder_data_ptr = (recorder as *const Self).cast::<()>();
+            let installed_data_ptr = (metrics::recorder() as *const dyn Recorder).cast::<()>();
+            if recorder_data_ptr == installed_data_ptr {
+                Ok(())
+            } else {
+                Err(err)
+            }
+        })?;
+
+        Ok(RecorderGuard { inner: guard })
+    }
+
     pub fn install(self) -> Result<(), SetRecorderError> {
         metrics::set_boxed_recorder(Box::new(self))
     }
@@ -315,15 +339,15 @@ impl TracingMetricsRecorder {
 
 impl Recorder for TracingMetricsRecorder {
     fn describe_counter(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        self.base().describe_counter(key, unit, description)
+        self.base().describe_counter(key, unit, description);
     }
 
     fn describe_gauge(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        self.base().describe_gauge(key, unit, description)
+        self.base().describe_gauge(key, unit, description);
     }
 
     fn describe_histogram(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        self.base().describe_histogram(key, unit, description)
+        self.base().describe_histogram(key, unit, description);
     }
 
     fn register_counter(&self, key: &Key) -> Counter {
@@ -336,5 +360,21 @@ impl Recorder for TracingMetricsRecorder {
 
     fn register_histogram(&self, key: &Key) -> Histogram {
         self.base().register_histogram(key)
+    }
+}
+
+/// Guard returned by [`TracingMetricsRecorder::install_exclusive()`]. Should be held
+/// while interference with metrics is a concern (e.g., for a duration of a test).
+#[must_use = "Guard must be held to ensure that metrics are not interfered with"]
+#[derive(Debug)]
+pub struct RecorderGuard {
+    inner: MutexGuard<'static, Option<&'static TracingMetricsRecorder>>,
+}
+
+impl Drop for RecorderGuard {
+    fn drop(&mut self) {
+        if let Some(recorder) = *self.inner {
+            recorder.base().clear();
+        }
     }
 }
