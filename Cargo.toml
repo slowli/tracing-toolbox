@@ -1,2 +1,20 @@
 [workspace]
 members = ["capture", "metrics-recorder", "tunnel"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.64"
+authors = ["Alex Ostrovski <ostrovski.alex@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/slowli/tracing-toolbox"
+
+[workspace.dependencies]
+# `tracing` dependencies
+tracing = "0.1.37"
+tracing-core = "0.1.30"
+tracing-subscriber = { version = "0.3.16", default-features = false }
+# Test dependencies
+assert_matches = "1.5.0"
+doc-comment = "0.3.3"
+version-sync = "0.9.4"

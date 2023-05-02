@@ -1,24 +1,27 @@
 [package]
 name = "tracing-metrics-recorder"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.64"
-authors = ["Alex Ostrovski <ostrovski.alex@gmail.com>"]
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 readme = "README.md"
 keywords = ["tracing", "logging", "wasm"]
 categories = ["development-tools::debugging", "development-tools::testing"]
 description = "Metrics recorder that outputs metric updates as tracing events"
-repository = "https://github.com/slowli/tracing-toolbox"
+
+[badges]
+maintenance = { status = "experimental" }
 
 [dependencies]
 metrics = "0.21.0"
 thread_local = "1.1.7"
-tracing = "0.1.37"
+tracing.workspace = true
 
 [dev-dependencies]
-doc-comment = "0.3.3"
-tracing-subscriber = { version = "0.3.16", features = ["fmt"] }
-version-sync = "0.9.4"
+doc-comment.workspace = true
+tracing-subscriber = { workspace = true, features = ["default"] }
+version-sync.workspace = true
 
 tracing-capture = { version = "0.1.0", path = "../capture" }
