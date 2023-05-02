@@ -8,7 +8,7 @@ use std::{
 };
 
 use tracing_capture::{metrics::MetricKind, CaptureLayer, SharedStorage};
-use tracing_metrics::TracingMetricsRecorder;
+use tracing_metrics_recorder::TracingMetricsRecorder;
 
 fn create_fmt_subscriber() -> impl Subscriber + for<'a> LookupSpan<'a> {
     FmtSubscriber::builder()
@@ -50,17 +50,16 @@ fn recording_metrics_as_events() {
 
     let storage = storage.lock();
     let counter_updates = storage.all_events().filter_map(|event| {
-        if let Some(update) = event.as_metric_update() {
-            // Check that all metric updates are properly located in the span tree.
-            let parent_span = event.parent().unwrap();
-            assert_eq!(parent_span.metadata().name(), "iteration");
-            assert!(parent_span["i"].as_int().is_some());
+        let update = event.as_metric_update()?;
+        // Check that all metric updates are properly located in the span tree.
+        let parent_span = event.parent().unwrap();
+        assert_eq!(parent_span.metadata().name(), "iteration");
+        assert!(parent_span["i"].as_int().is_some());
 
-            if update.metric.name == "greeting.count" {
-                assert_eq!(update.metric.kind, MetricKind::Counter);
-                assert!(update.metric.labels.is_empty());
-                return Some((update.prev_value.as_uint()?, update.value.as_uint()?));
-            }
+        if update.metric.name == "greeting.count" {
+            assert_eq!(update.metric.kind, MetricKind::Counter);
+            assert!(update.metric.labels.is_empty());
+            return Some((update.prev_value.as_uint()?, update.value.as_uint()?));
         }
         None
     });
@@ -68,11 +67,10 @@ fn recording_metrics_as_events() {
     assert_eq!(counter_updates, [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)]);
 
     let gauge_updates = storage.all_events().filter_map(|event| {
-        if let Some(update) = event.as_metric_update() {
-            if update.metric.name == "greeting.oddity" {
-                assert_eq!(update.metric.kind, MetricKind::Gauge);
-                return update.value.as_float();
-            }
+        let update = event.as_metric_update()?;
+        if update.metric.name == "greeting.oddity" {
+            assert_eq!(update.metric.kind, MetricKind::Gauge);
+            return update.value.as_float();
         }
         None
     });

@@ -11,7 +11,7 @@ use std::{
 };
 
 use tracing_capture::{CaptureLayer, SharedStorage, Storage};
-use tracing_metrics::TracingMetricsRecorder;
+use tracing_metrics_recorder::TracingMetricsRecorder;
 
 #[test]
 #[should_panic]
@@ -48,12 +48,11 @@ fn recorder_in_multithreaded_test() {
 
     let storage = storage.lock();
     let threads = storage.all_events().filter_map(|event| {
-        if let Some(event) = event.as_metric_update() {
-            if event.metric.name == "spawned.latency" {
-                assert_eq!(event.metric.unit, "seconds");
-                assert_eq!(event.metric.description, "latency");
-                return Some(event.metric.labels["thread"]);
-            }
+        let update = event.as_metric_update()?;
+        if update.metric.name == "spawned.latency" {
+            assert_eq!(update.metric.unit, "seconds");
+            assert_eq!(update.metric.description, "latency");
+            return Some(update.metric.labels["thread"]);
         }
         None
     });
@@ -65,10 +64,10 @@ fn recorder_in_multithreaded_test() {
 
 fn assert_counter(storage: &Storage) {
     for event in storage.all_events() {
-        if let Some(event) = event.as_metric_update() {
-            if event.metric.name == "spawned.counter" {
-                assert_eq!(*event.prev_value, 0_u128);
-                assert_eq!(*event.value, 1_u128);
+        if let Some(update) = event.as_metric_update() {
+            if update.metric.name == "spawned.counter" {
+                assert_eq!(*update.prev_value, 0_u128);
+                assert_eq!(*update.value, 1_u128);
             }
         }
     }
@@ -101,14 +100,13 @@ fn recorder_in_other_multithreaded_test() {
 
     let storage = storage.lock();
     let latency = storage.all_events().filter_map(|event| {
-        if let Some(event) = event.as_metric_update() {
-            if event.metric.name == "spawned.latency" {
-                assert_eq!(event.metric.unit, "microseconds");
-                assert_eq!(event.metric.description, "latency (us)");
-                let prev_value = event.prev_value.as_float().unwrap();
-                let value = event.value.as_float().unwrap();
-                return Some((prev_value, value));
-            }
+        let update = event.as_metric_update()?;
+        if update.metric.name == "spawned.latency" {
+            assert_eq!(update.metric.unit, "microseconds");
+            assert_eq!(update.metric.description, "latency (us)");
+            let prev_value = update.prev_value.as_float().unwrap();
+            let value = update.value.as_float().unwrap();
+            return Some((prev_value, value));
         }
         None
     });
