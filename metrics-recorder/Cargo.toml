@@ -17,6 +17,8 @@ thread_local = "1.1.7"
 tracing = "0.1.37"
 
 [dev-dependencies]
+doc-comment = "0.3.3"
 tracing-subscriber = { version = "0.3.16", features = ["fmt"] }
+version-sync = "0.9.4"
 
 tracing-capture = { version = "0.1.0", path = "../capture" }
