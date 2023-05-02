@@ -45,7 +45,7 @@ pub struct MetricUpdateEvent<'a> {
 
 impl<'a> MetricUpdateEvent<'a> {
     pub(crate) fn new(event: &CapturedEvent<'a>) -> Option<Self> {
-        const EXPECTED_TARGET: &str = "tracing_metrics";
+        const EXPECTED_TARGET: &str = "tracing_metrics_recorder";
 
         if event.metadata().target() != EXPECTED_TARGET {
             return None;
@@ -127,6 +127,7 @@ impl<'a> MetricUpdateEvent<'a> {
     }
 }
 
+// FIXME: self-contained tests
 #[cfg(test)]
 mod tests {
     use super::*;

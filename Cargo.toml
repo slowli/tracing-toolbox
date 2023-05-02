@@ -1,2 +1,2 @@
 [workspace]
-members = ["capture", "metrics", "tunnel"]
+members = ["capture", "metrics-recorder", "tunnel"]
