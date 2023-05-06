@@ -1,16 +1,29 @@
-//! Metric support.
-
-#![allow(missing_docs)] // FIXME
+//! Support of [`metrics`] events emitted by a [`tracing-metrics-recorder`].
+//!
+//! Provided that a `TracingMetricsRecorder` is installed as a metrics recorder,
+//! a [`MetricUpdateEvent`] event is emitted with [`MetricUpdateEvent::TARGET`]
+//! on the `INFO` level each time one of the "main" `metrics` macros is called
+//! (`counter!`, `gauge!`, `histogram!` etc.). Just like other tracing events, these events
+//! are attached to the currently active span(s).
+//!
+//! See `tracing-metrics-recorder` docs for the examples of usage.
+//!
+//! [`metrics`]: https://docs.rs/metrics/
+//! [`tracing-metrics-recorder`]: https://docs.rs/tracing-metrics-recorder/
 
 use std::collections::HashMap;
 
 use crate::CapturedEvent;
 use tracing_tunnel::TracedValue;
 
+/// Kind of a metric.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MetricKind {
+    /// Counter metric.
     Counter,
+    /// Gauge metric.
     Gauge,
+    /// Histogram metric.
     Histogram,
 }
 
@@ -25,29 +38,48 @@ impl MetricKind {
     }
 }
 
-#[derive(Debug)]
+/// Information about a metric.
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Metric<'a> {
+    /// Metric kind (a counter, gauge or histogram).
     pub kind: MetricKind,
+    /// Name of the metric specified in its `counter!`, `gauge!` or `histogram!` macro.
     pub name: &'a str,
+    /// Metric labels specified in its `counter!`, `gauge!` or `histogram!` macro.
     pub labels: HashMap<&'a str, &'a str>,
+    /// String representation of the measurement unit of the metric, specified in its
+    /// `describe_*` macro.
     pub unit: &'a str,
+    /// Human-readable metric description specified in its `describe_*` macro.
     pub description: &'a str,
 }
 
-#[derive(Debug)]
+/// Update event for a metric. Can be parsed from a [`CapturedEvent`] using
+/// its [`as_metric_update()`] method.
+///
+/// Metric update events are emitted using [`Self::TARGET`] on the `INFO` level, which can be used
+/// to filter captured events.
+///
+/// [`as_metric_update()`]: CapturedEvent::as_metric_update()
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct MetricUpdateEvent<'a> {
+    /// Information about the updated metric.
     pub metric: Metric<'a>,
+    /// The metric value after the update. Counter metrics have unsigned integer values,
+    /// while gauges and histograms have floating-point values.
     pub value: &'a TracedValue,
+    /// The metric value before the update.
     pub prev_value: &'a TracedValue,
 }
 
 impl<'a> MetricUpdateEvent<'a> {
-    pub(crate) fn new(event: &CapturedEvent<'a>) -> Option<Self> {
-        const EXPECTED_TARGET: &str = "tracing_metrics_recorder";
+    /// The target used by metric update events: `tracing_metrics_recorder`.
+    pub const TARGET: &'static str = "tracing_metrics_recorder";
 
-        if event.metadata().target() != EXPECTED_TARGET {
+    pub(crate) fn new(event: &CapturedEvent<'a>) -> Option<Self> {
+        if event.metadata().target() != Self::TARGET {
             return None;
         }
         let metric = Metric {

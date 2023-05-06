@@ -175,7 +175,8 @@ impl<'a> CapturedEvent<'a> {
         std::iter::successors(self.parent(), CapturedSpan::parent)
     }
 
-    /// FIXME
+    /// Tries to parse this event as a metric update event. See the [`metrics`] module
+    /// for more details.
     pub fn as_metric_update(&self) -> Option<MetricUpdateEvent<'a>> {
         MetricUpdateEvent::new(self)
     }
