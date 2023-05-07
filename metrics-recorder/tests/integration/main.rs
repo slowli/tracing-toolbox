@@ -2,10 +2,9 @@ use metrics::Unit;
 use tracing::{Level, Subscriber};
 use tracing_subscriber::{layer::SubscriberExt, registry::LookupSpan, FmtSubscriber};
 
-use std::{
-    thread,
-    time::{Duration, Instant},
-};
+use std::{thread, time::Duration};
+
+mod multithreaded;
 
 use tracing_capture::{metrics::MetricKind, CaptureLayer, SharedStorage};
 use tracing_metrics_recorder::TracingMetricsRecorder;
@@ -18,35 +17,35 @@ fn create_fmt_subscriber() -> impl Subscriber + for<'a> LookupSpan<'a> {
         .finish()
 }
 
-#[test]
-fn recording_metrics_as_events() {
-    TracingMetricsRecorder::per_thread().install().ok();
+fn generate_metrics() {
+    metrics::describe_histogram!(
+        "greeting.latency",
+        Unit::Seconds,
+        "time spent on a greeting"
+    );
+
+    tracing::info_span!("greeting").in_scope(|| {
+        for i in 0..5 {
+            let _entered = tracing::info_span!("iteration", i).entered();
+            metrics::counter!("greeting.count", 1);
+            metrics::gauge!("greeting.oddity", (i % 2) as f64);
+
+            thread::sleep(Duration::from_millis(10));
+            metrics::histogram!(
+                "greeting.latency",
+                Duration::from_millis(10),
+                "oddity" => (i % 2).to_string()
+            );
+        }
+    });
+}
+
+fn test_recording_metrics_as_events() {
+    let _guard = TracingMetricsRecorder::set().unwrap();
     let storage = SharedStorage::default();
     let subscriber = create_fmt_subscriber().with(CaptureLayer::new(&storage));
 
-    tracing::subscriber::with_default(subscriber, || {
-        metrics::describe_histogram!(
-            "greeting.latency",
-            Unit::Seconds,
-            "time spent on a greeting"
-        );
-
-        tracing::info_span!("greeting").in_scope(|| {
-            for i in 0..5 {
-                let _entered = tracing::info_span!("iteration", i).entered();
-                metrics::counter!("greeting.count", 1);
-                metrics::gauge!("greeting.oddity", (i % 2) as f64);
-
-                let start = Instant::now();
-                thread::sleep(Duration::from_millis(10));
-                metrics::histogram!(
-                    "greeting.latency",
-                    start.elapsed(),
-                    "oddity" => (i % 2).to_string()
-                );
-            }
-        });
-    });
+    tracing::subscriber::with_default(subscriber, generate_metrics);
 
     let storage = storage.lock();
     let counter_updates = storage.all_events().filter_map(|event| {
@@ -91,4 +90,16 @@ fn recording_metrics_as_events() {
         false
     });
     assert_eq!(histogram_updates.count(), 5);
+}
+
+#[test]
+fn recording_metrics_as_events() {
+    test_recording_metrics_as_events();
+    test_recording_metrics_as_events(); // Check that metrics are cleaned up
+}
+
+#[test]
+fn delayed_recording_metrics_as_events() {
+    thread::sleep(Duration::from_millis(500)); // Wait until the first test is done
+    test_recording_metrics_as_events();
 }

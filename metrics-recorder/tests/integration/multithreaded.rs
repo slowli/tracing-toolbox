@@ -1,7 +1,7 @@
 //! Testing multithreaded setup for `TracingMetricsRecorder`.
-//! Needs to be a separate test to not interfere with other recorder installations.
 
 use metrics::Unit;
+use serial_test::serial;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 use std::{
@@ -14,18 +14,20 @@ use tracing_capture::{CaptureLayer, SharedStorage, Storage};
 use tracing_metrics_recorder::TracingMetricsRecorder;
 
 #[test]
+#[serial("multithreaded")]
 #[should_panic]
 fn panics_do_not_prevent_multithreaded_recorder() {
-    let _guard = TracingMetricsRecorder::install_exclusive().unwrap();
+    let _guard = TracingMetricsRecorder::set_global().unwrap();
     metrics::counter!("spawned.counter", 100); // Check that the counter is reset for other tests
     panic!("oops");
 }
 
 #[test]
+#[serial("multithreaded")]
 fn recorder_in_multithreaded_test() {
     thread::sleep(Duration::from_millis(10));
     // ^ Ensure that the panicking test gets the lock first
-    let _guard = TracingMetricsRecorder::install_exclusive().unwrap();
+    let _guard = TracingMetricsRecorder::set_global().unwrap();
 
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
@@ -74,10 +76,11 @@ fn assert_counter(storage: &Storage) {
 }
 
 #[test]
+#[serial("multithreaded")]
 fn recorder_in_other_multithreaded_test() {
-    thread::sleep(Duration::from_millis(10));
+    thread::sleep(Duration::from_millis(100));
     // ^ Ensure that the panicking test gets the lock first
-    let _guard = TracingMetricsRecorder::install_exclusive().unwrap();
+    let _guard = TracingMetricsRecorder::set_global().unwrap();
 
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
