@@ -40,7 +40,7 @@
 //! # use std::error::Error;
 //!
 //! // Install the metrics recorder and capturing metrics subscriber.
-//! TracingMetricsRecorder::per_thread().install()?;
+//! TracingMetricsRecorder::default().install()?;
 //! let storage = SharedStorage::default();
 //! // Capture only metrics events.
 //! let targets = filter::Targets::new()
@@ -95,13 +95,12 @@ use metrics::{
     Counter, Gauge, Histogram, Key, KeyName, Recorder, SetRecorderError, SharedString, Unit,
 };
 
-use crate::router::GlobalRecorderGuard;
 use std::sync::{Arc, RwLock};
 
 mod helpers;
 mod router;
 
-pub use self::router::RecorderGuard;
+pub use self::router::{GlobalRecorderGuard, RecorderGuard};
 use self::{
     helpers::{MetricData, MetricKind, MetricMaps, MetricMetadata, MetricMetadataMaps},
     router::RecorderRouter,
@@ -117,32 +116,32 @@ type MetricDataMaps = MetricMaps<Key, Arc<MetricData>>;
 ///
 /// ## In debugged applications
 ///
-/// In the debugging use case, you may want to use [`Self::global()`]`.`[`install()`](Self::install()),
+/// In the debugging use case, you may want to use `Self::default().`[`install()`](Self::install()),
 /// which will install a recorder that will collect metrics from all threads into a single place.
 ///
 /// ```
 /// # use tracing_metrics_recorder::TracingMetricsRecorder;
 /// fn main() {
-///     TracingMetricsRecorder::global().install().ok();
+///     TracingMetricsRecorder::default().install().unwrap();
 ///     // Application code...
 /// }
 /// ```
 ///
 /// ## In single-threaded tests
 ///
-/// For use in tests, you may want to instantiate the recorder with [`Self::per_thread()`] instead:
+/// For use in tests, you may want to use [`Self::set()`].
 ///
 /// ```
 /// # use tracing_metrics_recorder::TracingMetricsRecorder;
 /// #[test]
 /// fn first_test() {
-///     TracingMetricsRecorder::per_thread().install().ok();
+///     let _guard = TracingMetricsRecorder::set().unwrap();
 ///     // Test code...
 /// }
 ///
 /// #[test]
 /// fn second_test() {
-///     TracingMetricsRecorder::per_thread().install().ok();
+///     let _guard = TracingMetricsRecorder::set().unwrap();
 ///     // Test code...
 /// }
 /// ```
@@ -155,30 +154,36 @@ type MetricDataMaps = MetricMaps<Key, Arc<MetricData>>;
 ///
 /// ## In multithreaded tests
 ///
-/// If everything else fails, there is [`Self::install_exclusive()`]. It tracks metrics
-/// from all threads, and uses a static mutex exclusively locked on each call to ensure
-/// that there is no interference.
+/// [`Self::set_global()`] works similar to [`Self::set()`], but tracks metrics
+/// from all threads. It does not ensure serial execution of tests, which can be required
+/// in order for test assertions to work properly.
+/// This can be achieved by external means, e.g. using the [`serial_test`] crate.
 ///
 /// ```
+/// use serial_test::serial;
 /// # use tracing_metrics_recorder::TracingMetricsRecorder;
+///
 /// #[test]
+/// #[serial("metrics")]
 /// fn first_test() {
-///     let _guard = TracingMetricsRecorder::install_exclusive().unwrap();
+///     let _guard = TracingMetricsRecorder::set_global().unwrap();
 ///     // Test code...
 /// }
 ///
 /// #[test]
+/// #[serial("metrics")]
 /// fn second_test() {
-///     let _guard = TracingMetricsRecorder::install_exclusive().unwrap();
+///     let _guard = TracingMetricsRecorder::set_global().unwrap();
 ///     // Test code...
 /// }
 /// ```
 ///
-/// Reporter installation will fail on subsequent calls in tests. As long as all tests install
-/// the same recorder, this is fine; the installed recorder will provide tracing events for all
-/// tests.
+/// `set()` and `set_global()` will not error as long as these are the only methods used to
+/// install a metrics recorder. That is, some tests may use `set()` and others `set_global()`,
+/// and they all will work.
 ///
 /// [tracing]: https://docs.rs/tracing/
+/// [`serial_test`]: https://docs.rs/serial_test/
 ///
 /// # Examples
 ///
@@ -194,27 +199,49 @@ impl TracingMetricsRecorder {
     /// Target for the tracing events emitted by the recorder.
     pub const TARGET: &'static str = env!("CARGO_CRATE_NAME");
 
+    /// Sets a new recorder for the current thread. The recorder will capture metrics until
+    /// the returned guard is dropped.
+    ///
+    /// This method is useful in single-threaded tests.
+    ///
     /// # Errors
     ///
-    /// FIXME
-    pub fn install(self) -> Result<(), SetRecorderError> {
-        metrics::set_boxed_recorder(Box::new(self))
-    }
-
-    /// # Errors
-    ///
-    /// FIXME
+    /// Returns an error if the recorder cannot be installed. This will happen if another
+    /// recorder has been already installed using `metrics::set_recorder()` or equivalent methods.
+    /// [`Self::set()`] and [`Self::set_global()`] calls elsewhere will not trigger an error.
     pub fn set() -> Result<RecorderGuard, SetRecorderError> {
         RecorderRouter::install()?;
         Ok(RecorderRouter::set(Self::default()))
     }
 
+    /// Sets a new recorder globally. The recorder will capture metrics until
+    /// the returned guard is dropped.
+    ///
+    /// This method is useful in multithreaded tests. In many cases, tests should be serialized
+    /// (executed one-by-one); this can be achieved using external means,
+    /// e.g. the [`serial_test`] crate.
+    ///
+    /// [`serial_test`]: https://docs.rs/serial_test/
+    ///
     /// # Errors
     ///
-    /// FIXME
+    /// Returns an error if the recorder cannot be installed. This will happen if another
+    /// recorder has been already installed using `metrics::set_recorder()` or equivalent methods.
+    /// [`Self::set()`] and [`Self::set_global()`] calls elsewhere will not trigger an error.
     pub fn set_global() -> Result<GlobalRecorderGuard, SetRecorderError> {
         RecorderRouter::install()?;
         Ok(RecorderRouter::set_global(Self::default()))
+    }
+
+    /// Installs this recorder as a global metrics recorder.
+    ///
+    /// This method is useful for debugging applications.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if another metrics recorder is already installed.
+    pub fn install(self) -> Result<(), SetRecorderError> {
+        metrics::set_boxed_recorder(Box::new(self))
     }
 
     fn get_or_insert_metric(&self, kind: MetricKind, key: &Key) -> Arc<MetricData> {

@@ -114,7 +114,12 @@ impl Recorder for RecorderRouter {
     }
 }
 
-/// FIXME
+/// Guard returned by [`TracingMetricsRecorder::set()`].
+///
+/// Once the guard is dropped, the `TracingMetricsRecorder` is uninstalled as a thread-local
+/// metrics recorder.
+///
+/// [`TracingMetricsRecorder::set()`]: crate::TracingMetricsRecorder::set()
 #[must_use = "The recorder is reset when the guard is dropped"]
 pub struct RecorderGuard(Option<Box<dyn Recorder>>);
 
@@ -136,7 +141,12 @@ impl Drop for RecorderGuard {
     }
 }
 
-/// FIXME
+/// Guard returned by [`TracingMetricsRecorder::set_global()`].
+///
+/// Once the guard is dropped, the `TracingMetricsRecorder` is uninstalled as a global
+/// metrics recorder.
+///
+/// [`TracingMetricsRecorder::set_global()`]: crate::TracingMetricsRecorder::set_global()
 #[must_use = "The recorder is reset when the guard is dropped"]
 pub struct GlobalRecorderGuard(Option<Box<dyn Recorder + Send + Sync>>);
 

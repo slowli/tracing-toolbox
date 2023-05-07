@@ -31,11 +31,12 @@ use tracing_subscriber::{layer::SubscriberExt, Registry};
 use tracing_metrics_recorder::TracingMetricsRecorder;
 use std::{error::Error, thread, time::{Duration, Instant}};
 
-// Install the metrics recorder and capturing metrics subscriber.
-TracingMetricsRecorder::per_thread().install()?;
+// Install a metrics recorder and a capturing metrics subscriber
+// for the current thread.
+let _guard = TracingMetricsRecorder::set()?;
 let storage = SharedStorage::default();
 let subscriber = Registry::default().with(CaptureLayer::new(&storage));
-tracing::subscriber::set_global_default(subscriber)?;
+let _guard = tracing::subscriber::set_default(subscriber);
 
 // Execute code with metrics.
 metrics::describe_histogram!("latency", Unit::Seconds, "Cycle latency");
