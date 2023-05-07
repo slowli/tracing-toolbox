@@ -159,3 +159,90 @@ impl Drop for GlobalRecorderGuard {
         *lock = recorder;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use metrics::Key;
+    use metrics_util::{
+        debugging::{DebugValue, DebuggingRecorder, Snapshotter},
+        CompositeKey, MetricKind,
+    };
+
+    use std::thread;
+
+    use super::*;
+
+    // Not a `const` because of interior mutability of `Key`
+    static COUNTER_KEY: CompositeKey =
+        CompositeKey::new(MetricKind::Counter, Key::from_static_name("test"));
+
+    fn assert_counter_value(snapshotter: &Snapshotter, expected: u64) {
+        let snapshot = snapshotter.snapshot().into_vec();
+        let (.., counter_value) = snapshot
+            .iter()
+            .find(|(key, ..)| *key == COUNTER_KEY)
+            .unwrap();
+        assert_eq!(*counter_value, DebugValue::Counter(expected));
+    }
+
+    #[test]
+    fn router_works_as_expected() {
+        RecorderRouter::install().unwrap();
+        let global_recorder = DebuggingRecorder::new();
+        let global = global_recorder.snapshotter();
+        let global_guard = RecorderRouter::set_global(global_recorder);
+
+        metrics::counter!("test", 2);
+        assert_counter_value(&global, 2);
+
+        // Install an additional local recorder. It should override the global recorder.
+        let local_recorder = DebuggingRecorder::new();
+        let local = local_recorder.snapshotter();
+        let local_guard = RecorderRouter::set(local_recorder);
+
+        metrics::counter!("test", 1);
+        assert_counter_value(&local, 1);
+        assert_counter_value(&global, 2);
+
+        // Test local recorder redeclaration.
+        {
+            let new_local_recorder = DebuggingRecorder::new();
+            let new_local = new_local_recorder.snapshotter();
+            let _guard = RecorderRouter::set(new_local_recorder);
+
+            metrics::counter!("test", 42);
+            assert_counter_value(&local, 1);
+            assert_counter_value(&global, 2);
+            assert_counter_value(&new_local, 42);
+        }
+
+        thread::scope(|scope| {
+            scope.spawn(|| {
+                // The globally set recorder should still be active.
+                metrics::counter!("test", 2);
+                assert_counter_value(&global, 4);
+
+                let new_local_recorder = DebuggingRecorder::new();
+                let new_local = new_local_recorder.snapshotter();
+                let _guard = RecorderRouter::set(new_local_recorder);
+
+                metrics::counter!("test", 42);
+                assert_counter_value(&local, 1);
+                assert_counter_value(&global, 4);
+                assert_counter_value(&new_local, 42);
+            });
+        });
+
+        metrics::counter!("test", 2);
+        assert_counter_value(&global, 4);
+        assert_counter_value(&local, 3);
+        drop((local_guard, local));
+
+        metrics::counter!("test", 3);
+        assert_counter_value(&global, 7);
+
+        drop(global_guard);
+        metrics::counter!("test", 3);
+        assert_counter_value(&global, 7);
+    }
+}
