@@ -4,9 +4,11 @@ use serde::{Deserialize, Serialize};
 use tracing_core::{Level, Metadata};
 
 use core::hash::Hash;
+#[cfg(feature = "std")]
+use std::path;
 
 use crate::{
-    alloc::{Cow, String, Vec},
+    alloc::{BTreeMap, Cow, String, Vec},
     TracedValues,
 };
 
@@ -184,4 +186,46 @@ pub enum TracingEvent {
         /// Values associated with the event.
         values: TracedValues<String>,
     },
+}
+
+impl TracingEvent {
+    /// Normalizes a captured sequence of events so that it does not contain information that
+    /// changes between program runs (e.g., metadata IDs) or due to minor refactoring
+    /// (source code lines). Normalized events can be used for snapshot testing
+    /// and other purposes when reproducibility is important.
+    pub fn normalize(events: &mut [Self]) {
+        let mut metadata_id_mapping = BTreeMap::new();
+        for event in events {
+            match event {
+                TracingEvent::NewCallSite { id, data } => {
+                    // Replace metadata ID to be predictable.
+                    let new_metadata_id = metadata_id_mapping.len() as MetadataId;
+                    metadata_id_mapping.insert(*id, new_metadata_id);
+                    *id = new_metadata_id;
+                    // Normalize file paths to have `/` path delimiters.
+                    #[cfg(feature = "std")]
+                    if path::MAIN_SEPARATOR != '/' {
+                        data.file = data
+                            .file
+                            .as_deref()
+                            .map(|path| path.replace(path::MAIN_SEPARATOR, "/").into());
+                    }
+                    // Make event data not depend on specific lines, which could easily
+                    // change due to refactoring etc.
+                    data.line = None;
+                    if matches!(data.kind, CallSiteKind::Event) {
+                        data.name = Cow::Borrowed("event");
+                    }
+                }
+                TracingEvent::NewSpan { metadata_id, .. }
+                | TracingEvent::NewEvent { metadata_id, .. } => {
+                    let new_metadata_id = metadata_id_mapping.len() as MetadataId;
+                    *metadata_id = *metadata_id_mapping
+                        .entry(*metadata_id)
+                        .or_insert(new_metadata_id);
+                }
+                _ => { /* No changes */ }
+            }
+        }
+    }
 }

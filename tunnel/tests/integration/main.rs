@@ -31,34 +31,10 @@ static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
     long: fib::record_events(80),
 });
 
-#[cfg(unix)] // The snapshot contains OS-specific path delimiters
 #[test]
 fn event_snapshot() {
-    use tracing_tunnel::MetadataId;
-
     let mut events = EVENTS.short.clone();
-    let mut metadata_id_mapping = HashMap::new();
-    for event in &mut events {
-        match event {
-            TracingEvent::NewCallSite { id, data } => {
-                // Replace metadata ID to be predictable.
-                let new_metadata_id = metadata_id_mapping.len() as MetadataId;
-                metadata_id_mapping.insert(*id, new_metadata_id);
-                *id = new_metadata_id;
-                // Make event data not depend on specific lines, which could easily
-                // change due to refactoring etc.
-                data.line = Some(42);
-                if matches!(data.kind, CallSiteKind::Event) {
-                    data.name = Cow::Borrowed("event");
-                }
-            }
-            TracingEvent::NewSpan { metadata_id, .. }
-            | TracingEvent::NewEvent { metadata_id, .. } => {
-                *metadata_id = metadata_id_mapping[metadata_id];
-            }
-            _ => { /* No changes */ }
-        }
-    }
+    TracingEvent::normalize(&mut events);
 
     insta::assert_yaml_snapshot!("events-fib-5", events);
 }

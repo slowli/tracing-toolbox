@@ -170,6 +170,8 @@ mod alloc {
 
     pub use alloc::{
         borrow::{Cow, ToOwned},
+        collections::BTreeMap,
+        // ^ `HashMap` would work better, but it's not present in `alloc`
         format,
         string::String,
         vec::{self, Vec},
