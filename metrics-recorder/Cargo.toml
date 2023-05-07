@@ -16,7 +16,6 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 metrics = "0.21.0"
-thread_local = "1.1.7"
 tracing.workspace = true
 
 [dev-dependencies]

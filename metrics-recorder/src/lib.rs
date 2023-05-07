@@ -94,100 +94,20 @@
 use metrics::{
     Counter, Gauge, Histogram, Key, KeyName, Recorder, SetRecorderError, SharedString, Unit,
 };
-use thread_local::ThreadLocal;
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
+use crate::router::GlobalRecorderGuard;
+use std::sync::{Arc, RwLock};
 
 mod helpers;
+mod router;
 
-use self::helpers::{MetricData, MetricKind, MetricMaps, MetricMetadata, MetricMetadataMaps};
+pub use self::router::RecorderGuard;
+use self::{
+    helpers::{MetricData, MetricKind, MetricMaps, MetricMetadata, MetricMetadataMaps},
+    router::RecorderRouter,
+};
 
 type MetricDataMaps = MetricMaps<Key, Arc<MetricData>>;
-
-/// Base of the metrics recorder. The `Arc`s and `RwLock`s used within are redundant for
-/// per-thread recorder implementation, but since `RwLock`s are not contested, their overhead
-/// should be fairly low.
-#[derive(Debug, Default)]
-struct RecorderBase {
-    metadata: Arc<RwLock<MetricMetadataMaps>>,
-    metrics: RwLock<MetricDataMaps>,
-}
-
-impl RecorderBase {
-    fn get_or_insert_metric(&self, kind: MetricKind, key: &Key) -> Arc<MetricData> {
-        let metrics = self.metrics.read().expect("metrics lock poisoned");
-        if let Some(data) = metrics.get(kind, key) {
-            return Arc::clone(data);
-        }
-        drop(metrics); // to prevent a deadlock on the next line
-
-        let mut metrics = self.metrics.write().expect("metrics lock poisoned");
-        if let Some(data) = metrics.get(kind, key) {
-            Arc::clone(data)
-        } else {
-            let metadata = Arc::clone(&self.metadata);
-            let metric = Arc::new(match kind {
-                MetricKind::Counter => MetricData::new_counter(metadata, key.clone()),
-                MetricKind::Gauge | MetricKind::Histogram => {
-                    MetricData::new_gauge(metadata, key.clone())
-                }
-            });
-            metrics.insert(kind, key.clone(), Arc::clone(&metric));
-            metric
-        }
-    }
-
-    fn clear(&self) {
-        let mut metrics = self.metrics.write().expect("metrics lock poisoned");
-        *metrics = MetricDataMaps::default();
-        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
-        *metadata = MetricMetadataMaps::default();
-    }
-}
-
-impl Recorder for RecorderBase {
-    fn describe_counter(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
-        let key = key.as_str().to_owned();
-        let metric_meta = MetricMetadata::new(unit, description);
-        metadata.insert(MetricKind::Counter, key, metric_meta);
-    }
-
-    fn describe_gauge(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
-        let key = key.as_str().to_owned();
-        let metric_meta = MetricMetadata::new(unit, description);
-        metadata.insert(MetricKind::Gauge, key, metric_meta);
-    }
-
-    fn describe_histogram(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
-        let key = key.as_str().to_owned();
-        let metric_meta = MetricMetadata::new(unit, description);
-        metadata.insert(MetricKind::Histogram, key, metric_meta);
-    }
-
-    fn register_counter(&self, key: &Key) -> Counter {
-        let counter = self.get_or_insert_metric(MetricKind::Counter, key);
-        Counter::from_arc(counter)
-    }
-
-    fn register_gauge(&self, key: &Key) -> Gauge {
-        let gauge = self.get_or_insert_metric(MetricKind::Gauge, key);
-        Gauge::from_arc(gauge)
-    }
-
-    fn register_histogram(&self, key: &Key) -> Histogram {
-        let histogram = self.get_or_insert_metric(MetricKind::Histogram, key);
-        Histogram::from_arc(histogram)
-    }
-}
-
-#[derive(Debug)]
-enum Inner {
-    Global(RecorderBase),
-    PerThread(Box<ThreadLocal<RecorderBase>>),
-}
 
 /// Metrics recorder that outputs metric updates as [tracing] events.
 ///
@@ -264,127 +184,98 @@ enum Inner {
 ///
 /// See the [crate-level docs](index.html#examples) for a complete example of usage.
 #[must_use = "Created recorder should be `install()`ed"]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TracingMetricsRecorder {
-    inner: Inner,
+    metadata: Arc<RwLock<MetricMetadataMaps>>,
+    metrics: RwLock<MetricDataMaps>,
 }
 
 impl TracingMetricsRecorder {
     /// Target for the tracing events emitted by the recorder.
     pub const TARGET: &'static str = env!("CARGO_CRATE_NAME");
 
-    /// Creates a new recorder that tracks metrics from all threads in a single place (i.e.,
-    /// like a real-world metrics recorder).
-    pub fn global() -> Self {
-        Self {
-            inner: Inner::Global(RecorderBase::default()),
-        }
-    }
-
-    /// Creates a new recorder that tracks metrics from each thread separately. This is useful
-    /// for single-threaded tests.
-    pub fn per_thread() -> Self {
-        Self {
-            inner: Inner::PerThread(Box::new(ThreadLocal::new())),
-        }
-    }
-
-    /// Creates and installs a recorder that tracks metrics from all threads in a single place
-    /// (i.e., like [`Self::global()`]), and additionally exclusively locks on each call
-    /// so that different runs do not interfere with each other. This can be used
-    /// for multithreaded tests.
-    ///
-    /// # Return value
-    ///
-    /// Returns a guard that should be held until interference with metrics is a concern.
-    /// On drop, the guard will reset the recorder state; it will forget all recorded metrics
-    /// and their metadata.
-    ///
     /// # Errors
     ///
-    /// Returns an error if the recorder cannot be installed because another recorder is already
-    /// installed as global.
-    pub fn install_exclusive() -> Result<RecorderGuard, SetRecorderError> {
-        static GLOBAL: Mutex<Option<&'static TracingMetricsRecorder>> = Mutex::new(None);
-
-        let mut guard = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
-        // ^ Since we only set the Mutex value once, its value cannot get corrupted.
-
-        let recorder = *guard.get_or_insert_with(|| {
-            let global = Box::new(Self::global());
-            Box::leak(global)
-        });
-
-        metrics::set_recorder(recorder).or_else(|err| {
-            let recorder_data_ptr = (recorder as *const Self).cast::<()>();
-            let installed_data_ptr = (metrics::recorder() as *const dyn Recorder).cast::<()>();
-            if recorder_data_ptr == installed_data_ptr {
-                Ok(())
-            } else {
-                Err(err)
-            }
-        })?;
-
-        Ok(RecorderGuard { inner: guard })
-    }
-
-    /// Installs this recorder as the global recorder.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the recorder cannot be installed because another recorder is already
-    /// installed as global.
+    /// FIXME
     pub fn install(self) -> Result<(), SetRecorderError> {
         metrics::set_boxed_recorder(Box::new(self))
     }
 
-    fn base(&self) -> &RecorderBase {
-        match &self.inner {
-            Inner::Global(base) => base,
-            Inner::PerThread(locals) => locals.get_or_default(),
+    /// # Errors
+    ///
+    /// FIXME
+    pub fn set() -> Result<RecorderGuard, SetRecorderError> {
+        RecorderRouter::install()?;
+        Ok(RecorderRouter::set(Self::default()))
+    }
+
+    /// # Errors
+    ///
+    /// FIXME
+    pub fn set_global() -> Result<GlobalRecorderGuard, SetRecorderError> {
+        RecorderRouter::install()?;
+        Ok(RecorderRouter::set_global(Self::default()))
+    }
+
+    fn get_or_insert_metric(&self, kind: MetricKind, key: &Key) -> Arc<MetricData> {
+        let metrics = self.metrics.read().expect("metrics lock poisoned");
+        if let Some(data) = metrics.get(kind, key) {
+            return Arc::clone(data);
+        }
+        drop(metrics); // to prevent a deadlock on the next line
+
+        let mut metrics = self.metrics.write().expect("metrics lock poisoned");
+        if let Some(data) = metrics.get(kind, key) {
+            Arc::clone(data)
+        } else {
+            let metadata = Arc::clone(&self.metadata);
+            let metric = Arc::new(match kind {
+                MetricKind::Counter => MetricData::new_counter(metadata, key.clone()),
+                MetricKind::Gauge | MetricKind::Histogram => {
+                    MetricData::new_gauge(metadata, key.clone())
+                }
+            });
+            metrics.insert(kind, key.clone(), Arc::clone(&metric));
+            metric
         }
     }
 }
 
 impl Recorder for TracingMetricsRecorder {
     fn describe_counter(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        self.base().describe_counter(key, unit, description);
+        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
+        let key = key.as_str().to_owned();
+        let metric_meta = MetricMetadata::new(unit, description);
+        metadata.insert(MetricKind::Counter, key, metric_meta);
     }
 
     fn describe_gauge(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        self.base().describe_gauge(key, unit, description);
+        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
+        let key = key.as_str().to_owned();
+        let metric_meta = MetricMetadata::new(unit, description);
+        metadata.insert(MetricKind::Gauge, key, metric_meta);
     }
 
     fn describe_histogram(&self, key: KeyName, unit: Option<Unit>, description: SharedString) {
-        self.base().describe_histogram(key, unit, description);
+        let mut metadata = self.metadata.write().expect("metadata lock poisoned");
+        let key = key.as_str().to_owned();
+        let metric_meta = MetricMetadata::new(unit, description);
+        metadata.insert(MetricKind::Histogram, key, metric_meta);
     }
 
     fn register_counter(&self, key: &Key) -> Counter {
-        self.base().register_counter(key)
+        let counter = self.get_or_insert_metric(MetricKind::Counter, key);
+        Counter::from_arc(counter)
     }
 
     fn register_gauge(&self, key: &Key) -> Gauge {
-        self.base().register_gauge(key)
+        let gauge = self.get_or_insert_metric(MetricKind::Gauge, key);
+        Gauge::from_arc(gauge)
     }
 
     fn register_histogram(&self, key: &Key) -> Histogram {
-        self.base().register_histogram(key)
-    }
-}
-
-/// Guard returned by [`TracingMetricsRecorder::install_exclusive()`]. Should be held
-/// while interference with metrics is a concern (e.g., for a duration of a test).
-#[must_use = "Guard must be held to ensure that metrics are not interfered with"]
-#[derive(Debug)]
-pub struct RecorderGuard {
-    inner: MutexGuard<'static, Option<&'static TracingMetricsRecorder>>,
-}
-
-impl Drop for RecorderGuard {
-    fn drop(&mut self) {
-        if let Some(recorder) = *self.inner {
-            recorder.base().clear();
-        }
+        let histogram = self.get_or_insert_metric(MetricKind::Histogram, key);
+        Histogram::from_arc(histogram)
     }
 }
 
