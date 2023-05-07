@@ -2,7 +2,10 @@ use metrics::Unit;
 use tracing::{Level, Subscriber};
 use tracing_subscriber::{layer::SubscriberExt, registry::LookupSpan, FmtSubscriber};
 
-use std::{thread, time::Duration};
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
 
 mod multithreaded;
 
@@ -30,10 +33,11 @@ fn generate_metrics() {
             metrics::counter!("greeting.count", 1);
             metrics::gauge!("greeting.oddity", (i % 2) as f64);
 
+            let start = Instant::now();
             thread::sleep(Duration::from_millis(10));
             metrics::histogram!(
                 "greeting.latency",
-                Duration::from_millis(10),
+                start.elapsed(),
                 "oddity" => (i % 2).to_string()
             );
         }

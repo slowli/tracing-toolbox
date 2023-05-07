@@ -159,7 +159,6 @@ impl<'a> MetricUpdateEvent<'a> {
     }
 }
 
-// FIXME: self-contained tests
 #[cfg(test)]
 mod tests {
     use super::*;
