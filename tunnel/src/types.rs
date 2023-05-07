@@ -8,7 +8,7 @@ use core::hash::Hash;
 use std::path;
 
 use crate::{
-    alloc::{Cow, HashMap, String, Vec},
+    alloc::{BTreeMap, Cow, String, Vec},
     TracedValues,
 };
 
@@ -194,7 +194,7 @@ impl TracingEvent {
     /// (source code lines). Normalized events can be used for snapshot testing
     /// and other purposes when reproducibility is important.
     pub fn normalize(events: &mut [Self]) {
-        let mut metadata_id_mapping = HashMap::new();
+        let mut metadata_id_mapping = BTreeMap::new();
         for event in events {
             match event {
                 TracingEvent::NewCallSite { id, data } => {
