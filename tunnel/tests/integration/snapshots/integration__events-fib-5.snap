@@ -1,6 +1,6 @@
 ---
 source: tunnel/tests/integration/main.rs
-assertion_line: 45
+assertion_line: 39
 expression: events
 ---
 - new_call_site:
@@ -11,7 +11,6 @@ expression: events
     level: info
     module_path: "integration::fib"
     file: tunnel/tests/integration/fib.rs
-    line: 42
     fields:
       - approx
 - new_span:
@@ -33,7 +32,6 @@ expression: events
     level: warn
     module_path: "integration::fib"
     file: tunnel/tests/integration/fib.rs
-    line: 42
     fields:
       - message
       - count
@@ -52,7 +50,6 @@ expression: events
     level: info
     module_path: "integration::fib"
     file: tunnel/tests/integration/fib.rs
-    line: 42
     fields:
       - count
 - new_span:
@@ -71,7 +68,6 @@ expression: events
     level: debug
     module_path: "integration::fib"
     file: tunnel/tests/integration/fib.rs
-    line: 42
     fields:
       - message
       - i
@@ -129,7 +125,6 @@ expression: events
     level: info
     module_path: "integration::fib"
     file: tunnel/tests/integration/fib.rs
-    line: 42
     fields:
       - return
 - new_event:
@@ -149,7 +144,6 @@ expression: events
     level: info
     module_path: "integration::fib"
     file: tunnel/tests/integration/fib.rs
-    line: 42
     fields:
       - message
       - result

@@ -170,6 +170,7 @@ mod alloc {
 
     pub use alloc::{
         borrow::{Cow, ToOwned},
+        collections::HashMap,
         format,
         string::String,
         vec::{self, Vec},
