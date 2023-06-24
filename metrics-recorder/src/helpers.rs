@@ -96,6 +96,12 @@ impl fmt::Debug for MetricLabels {
     }
 }
 
+impl fmt::Display for MetricLabels {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self, formatter)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct MetricData {
     metadata: Arc<RwLock<MetricMetadataMaps>>,
@@ -141,6 +147,11 @@ impl MetricData {
         };
         let kind = kind.as_str();
         let description = metadata.description.as_ref();
+        let labels_str: &dyn fmt::Display = if self.labels.0.is_empty() {
+            &""
+        } else {
+            &self.labels
+        };
 
         tracing::info!(
             target: env!("CARGO_CRATE_NAME"),
@@ -159,7 +170,7 @@ impl MetricData {
             } else {
                 Some(description)
             },
-            "{kind} `{name}` = {value}{unit_spacing}{unit_str}"
+            "{kind} {name}{labels_str} = {value}{unit_spacing}{unit_str}"
         );
     }
 }

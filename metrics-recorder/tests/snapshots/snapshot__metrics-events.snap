@@ -57,7 +57,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "counter `greeting.count` = 1"
+        object: counter greeting.count = 1
       kind:
         string: counter
       name:
@@ -70,7 +70,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "gauge `greeting.oddity` = 0"
+        object: gauge greeting.oddity = 0
       kind:
         string: gauge
       name:
@@ -83,7 +83,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "histogram `greeting.latency` = 0.01 seconds"
+        object: "histogram greeting.latency{\"oddity\": \"0\"} = 0.01 seconds"
       kind:
         string: histogram
       name:
@@ -114,7 +114,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "counter `greeting.count` = 2"
+        object: counter greeting.count = 2
       kind:
         string: counter
       name:
@@ -127,7 +127,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "gauge `greeting.oddity` = 1"
+        object: gauge greeting.oddity = 1
       kind:
         string: gauge
       name:
@@ -140,7 +140,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "histogram `greeting.latency` = 0.02 seconds"
+        object: "histogram greeting.latency{\"oddity\": \"1\"} = 0.02 seconds"
       kind:
         string: histogram
       name:
@@ -171,7 +171,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "counter `greeting.count` = 3"
+        object: counter greeting.count = 3
       kind:
         string: counter
       name:
@@ -184,7 +184,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "gauge `greeting.oddity` = 0"
+        object: gauge greeting.oddity = 0
       kind:
         string: gauge
       name:
@@ -197,7 +197,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "histogram `greeting.latency` = 0.03 seconds"
+        object: "histogram greeting.latency{\"oddity\": \"0\"} = 0.03 seconds"
       kind:
         string: histogram
       name:
@@ -228,7 +228,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "counter `greeting.count` = 4"
+        object: counter greeting.count = 4
       kind:
         string: counter
       name:
@@ -241,7 +241,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "gauge `greeting.oddity` = 1"
+        object: gauge greeting.oddity = 1
       kind:
         string: gauge
       name:
@@ -254,7 +254,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "histogram `greeting.latency` = 0.04 seconds"
+        object: "histogram greeting.latency{\"oddity\": \"1\"} = 0.04 seconds"
       kind:
         string: histogram
       name:
@@ -285,7 +285,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "counter `greeting.count` = 5"
+        object: counter greeting.count = 5
       kind:
         string: counter
       name:
@@ -298,7 +298,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "gauge `greeting.oddity` = 0"
+        object: gauge greeting.oddity = 0
       kind:
         string: gauge
       name:
@@ -311,7 +311,7 @@ expression: events
     metadata_id: 2
     values:
       message:
-        object: "histogram `greeting.latency` = 0.05 seconds"
+        object: "histogram greeting.latency{\"oddity\": \"0\"} = 0.05 seconds"
       kind:
         string: histogram
       name:
