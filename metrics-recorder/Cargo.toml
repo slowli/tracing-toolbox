@@ -15,7 +15,7 @@ description = "Metrics recorder that outputs metric updates as tracing events"
 maintenance = { status = "experimental" }
 
 [dependencies]
-metrics = "0.21.0"
+metrics = "0.22.0"
 tracing.workspace = true
 
 [dev-dependencies]
