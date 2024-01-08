@@ -22,7 +22,7 @@ tracing.workspace = true
 doc-comment.workspace = true
 insta.workspace = true
 metrics-util = { version = "0.15.0", default-features = false, features = ["debugging"] }
-serial_test = { version = "2", default-features = false }
+serial_test = { version = "3", default-features = false }
 tracing-subscriber = { workspace = true, features = ["default"] }
 version-sync.workspace = true
 
