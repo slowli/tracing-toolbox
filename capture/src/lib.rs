@@ -222,6 +222,7 @@ struct CapturedSpanInner {
     parent_id: Option<CapturedSpanId>,
     child_ids: Vec<CapturedSpanId>,
     event_ids: Vec<CapturedEventId>,
+    follows_from_ids: Vec<CapturedSpanId>,
 }
 
 type CapturedSpanId = id_arena::Id<CapturedSpanInner>;
@@ -336,6 +337,11 @@ impl<'a> CapturedSpan<'a> {
     /// use something like `span.events().chain(span.descendant_events())`.
     pub fn descendant_events(&self) -> DescendantEvents<'a> {
         DescendantEvents::new(self)
+    }
+
+    /// Iterates over the spans this span follows from.
+    pub fn follows_from(&self) -> CapturedSpans<'a> {
+        CapturedSpans::from_slice(self.storage, &self.inner.follows_from_ids)
     }
 }
 
