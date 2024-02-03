@@ -317,7 +317,7 @@ fn capturing_span_hierarchy() {
     assert_eq!(storage.root_spans().len(), 1);
     assert_eq!(storage.root_events().len(), 0);
 
-    let inner_span = storage.all_spans().rev().next().unwrap();
+    let inner_span = storage.all_spans().next_back().unwrap();
     assert_eq!(inner_span["value"], 0_u64);
     let ancestor_values: Vec<_> = inner_span
         .ancestors()

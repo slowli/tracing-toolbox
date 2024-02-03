@@ -66,7 +66,6 @@ use std::{cmp, fmt, ops, ptr};
 
 mod iter;
 mod layer;
-pub mod metrics;
 pub mod predicates;
 
 pub use crate::{
@@ -74,7 +73,6 @@ pub use crate::{
     layer::{CaptureLayer, SharedStorage, Storage},
 };
 
-use crate::metrics::MetricUpdateEvent;
 use tracing_tunnel::{TracedValue, TracedValues};
 
 mod sealed {
@@ -173,12 +171,6 @@ impl<'a> CapturedEvent<'a> {
     /// and ending in one of [root spans](Storage::root_spans()).
     pub fn ancestors(&self) -> impl Iterator<Item = CapturedSpan<'a>> + '_ {
         std::iter::successors(self.parent(), CapturedSpan::parent)
-    }
-
-    /// Tries to parse this event as a metric update event. See the [`metrics`] module
-    /// for more details.
-    pub fn as_metric_update(&self) -> Option<MetricUpdateEvent<'a>> {
-        MetricUpdateEvent::new(self)
     }
 }
 

@@ -126,8 +126,7 @@ jobs:
         run: |
           cargo clean --doc && \
           cargo rustdoc -p tracing-tunnel --all-features -- --cfg docsrs && \
-          cargo rustdoc -p tracing-capture --all-features -- --cfg docsrs && \
-          cargo rustdoc -p tracing-metrics-recorder --all-features -- --cfg docsrs
+          cargo rustdoc -p tracing-capture --all-features -- --cfg docsrs
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4

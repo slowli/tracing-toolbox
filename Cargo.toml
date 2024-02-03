@@ -1,5 +1,5 @@
 [workspace]
-members = ["capture", "metrics-recorder", "tunnel"]
+members = ["capture", "tunnel"]
 
 [workspace.package]
 version = "0.1.0"

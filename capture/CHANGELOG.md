@@ -5,10 +5,6 @@ The project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
-### Added
-
-- Support metrics update events emitted by [`tracing-metrics-recorder`].
-
 ### Changed
 
 - Update `predicates` dependency.
@@ -22,5 +18,3 @@ The project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 ## 0.1.0 - 2022-12-09
 
 The initial release of `tracing-capture`.
-
-[`tracing-metrics-recorder`]: https://crates.io/crates/tracing-metrics-recorder
