@@ -94,6 +94,7 @@ impl Storage {
             parent_id,
             child_ids: vec![],
             event_ids: vec![],
+            follows_from_ids: vec![],
         });
         if let Some(parent_id) = parent_id {
             let span = self.spans.get_mut(parent_id).unwrap();
@@ -122,6 +123,11 @@ impl Storage {
     fn on_record(&mut self, id: CapturedSpanId, values: TracedValues<&'static str>) {
         let span = self.spans.get_mut(id).unwrap();
         span.values.extend(values);
+    }
+
+    fn on_follows_from(&mut self, id: CapturedSpanId, follows_id: CapturedSpanId) {
+        let span = self.spans.get_mut(id).unwrap();
+        span.follows_from_ids.push(follows_id);
     }
 
     pub(crate) fn push_event(
@@ -298,6 +304,16 @@ where
         let span = ctx.span(&id).unwrap();
         if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
             self.lock().on_span_closed(id);
+        };
+    }
+
+    fn on_follows_from(&self, id: &Id, follows_id: &Id, ctx: Context<'_, S>) {
+        let span = ctx.span(id).unwrap();
+        let follows = ctx.span(follows_id).unwrap();
+        if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
+            if let Some(follows_id) = follows.extensions().get::<CapturedSpanId>().copied() {
+                self.lock().on_follows_from(id, follows_id);
+            }
         };
     }
 }
