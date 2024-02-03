@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 env:
-  msrv: 1.64.0
-  nightly: nightly-2023-03-19
+  msrv: 1.70.0
+  nightly: nightly-2023-09-09
 
 jobs:
   build-msrv:
@@ -21,8 +21,6 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.msrv }}
-      - name: Generate lockfile
-        run: cargo generate-lockfile
 
       - name: Cache cargo build
         uses: actions/cache@v3
@@ -47,8 +45,11 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
-      - name: Generate lockfile
-        run: cargo generate-lockfile
+      - name: Install cargo-deny
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: cargo-deny
+          version: "^0.14"
 
       - name: Cache cargo build
         uses: actions/cache@v3
@@ -66,6 +67,9 @@ jobs:
       - name: Clippy tunnel (features=receiver)
         run: cargo clippy -p tracing-tunnel --features receiver --all-targets -- -D warnings
 
+      - name: Check dependencies
+        run: cargo deny --workspace --all-features check
+
       - name: Run tests
         run: cargo test --workspace --all-features --all-targets
       - name: Run doc tests
@@ -82,8 +86,6 @@ jobs:
         with:
           toolchain: ${{ env.nightly }}
           targets: thumbv7m-none-eabi
-      - name: Generate lockfile
-        run: cargo generate-lockfile
 
       - name: Cache cargo build
         uses: actions/cache@v3
@@ -112,8 +114,6 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.nightly }}
-      - name: Generate lockfile
-        run: cargo generate-lockfile
 
       - name: Cache cargo build
         uses: actions/cache@v3
@@ -126,8 +126,7 @@ jobs:
         run: |
           cargo clean --doc && \
           cargo rustdoc -p tracing-tunnel --all-features -- --cfg docsrs && \
-          cargo rustdoc -p tracing-capture --all-features -- --cfg docsrs && \
-          cargo rustdoc -p tracing-metrics-recorder --all-features -- --cfg docsrs
+          cargo rustdoc -p tracing-capture --all-features -- --cfg docsrs
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
