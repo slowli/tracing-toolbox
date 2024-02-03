@@ -117,9 +117,7 @@ impl<'a, P: Predicate<TracedValue>, T: Captured<'a>> Predicate<T> for FieldPredi
     }
 
     fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
-        let value = if let Some(value) = variable.value(self.name) {
-            value
-        } else {
+        let Some(value) = variable.value(self.name) else {
             return if expected {
                 None // was expecting a variable, but there is none
             } else {
@@ -329,9 +327,7 @@ impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for MessagePredicate<P> {
     }
 
     fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {
-        let message = if let Some(message) = variable.message() {
-            message
-        } else {
+        let Some(message) = variable.message() else {
             return if expected {
                 None // was expecting a variable, but there is none
             } else {

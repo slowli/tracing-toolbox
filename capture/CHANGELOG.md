@@ -8,7 +8,7 @@ The project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 ### Changed
 
 - Update `predicates` dependency.
-- Bump minimum supported Rust version to 1.64.
+- Bump minimum supported Rust version to 1.70.
 
 ### Fixed
 

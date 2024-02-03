@@ -72,10 +72,7 @@ where
     }
 
     fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
-        let parent = variable.parent();
-        let parent = if let Some(parent) = parent {
-            parent
-        } else {
+        let Some(parent) = variable.parent() else {
             return if expected {
                 None // was expecting a parent, but there is none
             } else {
