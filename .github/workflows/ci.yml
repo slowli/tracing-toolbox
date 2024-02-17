@@ -105,6 +105,8 @@ jobs:
       - build
       - build-msrv
       - build-nightly
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
 
     steps:
