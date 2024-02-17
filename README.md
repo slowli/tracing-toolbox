@@ -11,6 +11,11 @@ Currently, the following tools are included:
 - [`tracing-capture`](capture): Allows capturing tracing spans and events,
   e.g. to use in test assertions.
 
+## Contributing
+
+All contributions are welcome! See [the contributing guide](CONTRIBUTING.md) to help
+you get involved.
+
 ## License
 
 All code is licensed under either of [Apache License, Version 2.0](LICENSE-APACHE)

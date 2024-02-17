@@ -5,7 +5,7 @@ use predicates::ord::eq;
 use tracing_core::{Level, LevelFilter};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
-use std::{borrow::Cow, panic};
+use std::{borrow::Cow, panic, thread, time::Duration};
 
 mod fib;
 
@@ -369,6 +369,7 @@ fn capturing_wide_span_graph() {
         for child in span.children() {
             assert!(span < child);
         }
+        assert!(span.follows_from().next().is_none());
     }
     let event_pairs = storage.all_events().zip(storage.all_events().skip(1));
     for (prev, next) in event_pairs {
@@ -455,6 +456,47 @@ fn explicit_parent_is_correctly_handled() {
     let child_span = events.next().unwrap().parent().unwrap();
     assert_eq!(child_span.metadata().name(), "child");
     assert_eq!(child_span.parent(), Some(event_parent));
+}
+
+#[test]
+fn recording_follows_from_relations() {
+    let storage = SharedStorage::default();
+    let subscriber = Registry::default().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || {
+        let main_span = tracing::info_span!("main");
+        let other_span = tracing::info_span!("other");
+        for i in 0..3 {
+            let task_span = tracing::debug_span!("task", i);
+            task_span.follows_from(&main_span);
+            if i == 0 {
+                task_span.follows_from(&other_span);
+            }
+
+            let _entered = task_span.enter();
+            thread::sleep(Duration::from_millis(5));
+            tracing::info!(i, "task finished");
+        }
+    });
+
+    let storage = storage.lock();
+    assert_eq!(storage.root_spans().len(), 5);
+
+    let task_spans = storage
+        .root_spans()
+        .filter(|span| *span.metadata().level() == Level::DEBUG);
+    for (i, task_span) in task_spans.enumerate() {
+        assert_eq!(task_span.metadata().name(), "task");
+        assert_eq!(task_span.follows_from().len(), if i == 0 { 2 } else { 1 });
+        let mut followed_spans = task_span.follows_from();
+        let followed_span = followed_spans.next().unwrap();
+        assert_eq!(*followed_span.metadata().level(), Level::INFO);
+        assert_eq!(followed_span.metadata().name(), "main");
+        if i == 0 {
+            let followed_span = followed_spans.next().unwrap();
+            assert_eq!(*followed_span.metadata().level(), Level::INFO);
+            assert_eq!(followed_span.metadata().name(), "other");
+        }
+    }
 }
 
 #[test]
