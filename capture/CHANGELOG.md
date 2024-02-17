@@ -5,6 +5,10 @@ The project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- Support "follows from" relations between spans.
+
 ### Changed
 
 - Update `predicates` dependency.
