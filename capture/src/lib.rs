@@ -54,7 +54,7 @@
 //! [`tracing-fluent-assertions`]: https://docs.rs/tracing-fluent-assertions
 
 // Documentation settings.
-#![doc(html_root_url = "https://docs.rs/tracing-capture/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/tracing-capture/0.2.0-beta.1")]
 // Linter settings.
 #![warn(missing_debug_implementations, missing_docs, bare_trait_objects)]
 #![warn(clippy::all, clippy::pedantic)]

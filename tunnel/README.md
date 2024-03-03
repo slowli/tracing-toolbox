@@ -32,7 +32,7 @@ Add this to your `Crate.toml`:
 
 ```toml
 [dependencies]
-tracing-tunnel = "0.1.0"
+tracing-tunnel = "0.2.0-beta.1"
 ```
 
 Note that the both pieces of functionality described above are gated behind opt-in features;
