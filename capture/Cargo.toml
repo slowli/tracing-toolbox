@@ -21,7 +21,7 @@ tracing-core.workspace = true
 tracing-subscriber = { workspace = true, features = ["std", "registry"] }
 # Private dependencies.
 id-arena = "2.2.1"
-tracing-tunnel = { version = "0.1.0", path = "../tunnel" }
+tracing-tunnel = { version = "0.2.0-beta.1", path = "../tunnel" }
 
 [dev-dependencies]
 assert_matches.workspace = true
@@ -30,4 +30,4 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["default"] }
 version-sync.workspace = true
 
-tracing-tunnel = { version = "0.1.0", path = "../tunnel", features = ["sender", "receiver"] }
+tracing-tunnel = { version = "0.2.0-beta.1", path = "../tunnel", features = ["sender", "receiver"] }

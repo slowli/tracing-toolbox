@@ -5,6 +5,8 @@ The project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## 0.2.0-beta.1 - 2024-03-03
+
 ### Added
 
 - Expose `TracingEvent::normalize()` to transform a sequence of events so that

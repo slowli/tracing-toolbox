@@ -22,7 +22,7 @@ Add this to your `Crate.toml`:
 
 ```toml
 [dependencies]
-tracing-capture = "0.1.0"
+tracing-capture = "0.2.0-beta.1"
 ```
 
 ### Capturing spans for test assertions
