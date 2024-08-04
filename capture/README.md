@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/slowli/tracing-toolbox/workflows/CI/badge.svg?branch=main)](https://github.com/slowli/tracing-toolbox/actions)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/slowli/tracing-toolbox#license)
-![rust 1.70+ required](https://img.shields.io/badge/rust-1.70+-blue.svg?label=Required%20Rust)
+![rust 1.74+ required](https://img.shields.io/badge/rust-1.74+-blue.svg?label=Required%20Rust)
 
 **Documentation:** [![Docs.rs](https://docs.rs/tracing-capture/badge.svg)](https://docs.rs/tracing-capture/)
 [![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://slowli.github.io/tracing-toolbox/tracing_capture/)
