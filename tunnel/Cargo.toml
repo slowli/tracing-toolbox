@@ -22,7 +22,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 # Public dependencies (present in the public API of the crate).
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
-tracing-core = { version = "0.1.30", default-features = false }
+tracing-core = { version = "0.1.33", default-features = false }
 # Private dependencies.
 once_cell = { version = "1.20.2", optional = true }
 
