@@ -185,7 +185,7 @@ impl<'a, S: AsRef<str>> Iterator for TracedValuesIter<'a, S> {
     }
 }
 
-impl<'a, S: AsRef<str>> DoubleEndedIterator for TracedValuesIter<'a, S> {
+impl<S: AsRef<str>> DoubleEndedIterator for TracedValuesIter<'_, S> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.inner
             .next_back()
@@ -193,7 +193,7 @@ impl<'a, S: AsRef<str>> DoubleEndedIterator for TracedValuesIter<'a, S> {
     }
 }
 
-impl<'a, S: AsRef<str>> ExactSizeIterator for TracedValuesIter<'a, S> {
+impl<S: AsRef<str>> ExactSizeIterator for TracedValuesIter<'_, S> {
     fn len(&self) -> usize {
         self.inner.len()
     }
