@@ -24,6 +24,7 @@ maintenance = { status = "experimental" }
 serde = { workspace = true, features = ["alloc", "derive"] }
 tracing-core.workspace = true
 # Private dependencies.
+thread_local = { version = "1.1.8", optional = true }
 once_cell = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -43,7 +44,7 @@ default = ["std"]
 # end of the tunnel.
 std = ["tracing-core/std"]
 # Enables `TracingEventSender`.
-sender = []
+sender = ["thread_local"]
 # Enables `TracingEventReceiver` and closely related types.
 receiver = ["std", "once_cell"]
 
