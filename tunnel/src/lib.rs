@@ -157,6 +157,7 @@ mod receiver;
 #[cfg(feature = "sender")]
 #[cfg_attr(docsrs, doc(cfg(feature = "sender")))]
 mod sender;
+mod stack;
 mod types;
 mod value;
 mod values;
