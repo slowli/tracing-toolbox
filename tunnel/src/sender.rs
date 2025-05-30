@@ -1,19 +1,28 @@
 //! Client-side subscriber.
 
+use thread_local::ThreadLocal;
 use tracing_core::{
     span::{Attributes, Id, Record},
     Event, Interest, Metadata, Subscriber,
 };
 
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::{
+    cell::{self, RefCell},
+    sync::atomic::{AtomicU32, Ordering},
+};
 
-use crate::{CallSiteData, MetadataId, RawSpanId, TracedValues, TracingEvent};
+use crate::{stack::SpanStack, CallSiteData, MetadataId, RawSpanId, TracedValues, TracingEvent};
 
 impl TracingEvent {
-    fn new_span(span: &Attributes<'_>, metadata_id: MetadataId, id: RawSpanId) -> Self {
+    fn new_span(
+        span: &Attributes<'_>,
+        context_parent: impl FnOnce() -> Option<u64>,
+        metadata_id: MetadataId,
+        id: RawSpanId,
+    ) -> Self {
         Self::NewSpan {
             id,
-            parent_id: span.parent().map(Id::into_u64),
+            parent_id: span.parent().map(Id::into_u64).or_else(context_parent),
             metadata_id,
             values: TracedValues::from_values(span.values()),
         }
@@ -26,10 +35,14 @@ impl TracingEvent {
         }
     }
 
-    fn new_event(event: &Event<'_>, metadata_id: MetadataId) -> Self {
+    fn new_event(
+        event: &Event<'_>,
+        context_parent: impl FnOnce() -> Option<u64>,
+        metadata_id: MetadataId,
+    ) -> Self {
         Self::NewEvent {
             metadata_id,
-            parent: event.parent().map(Id::into_u64),
+            parent: event.parent().map(Id::into_u64).or_else(context_parent),
             values: TracedValues::from_event(event),
         }
     }
@@ -50,6 +63,7 @@ impl TracingEvent {
 #[derive(Debug)]
 pub struct TracingEventSender<F = fn(TracingEvent)> {
     next_span_id: AtomicU32,
+    current_spans: ThreadLocal<RefCell<SpanStack>>,
     on_event: F,
 }
 
@@ -58,6 +72,7 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
     pub fn new(on_event: F) -> Self {
         Self {
             next_span_id: AtomicU32::new(1), // 0 is invalid span ID
+            current_spans: ThreadLocal::new(),
             on_event,
         }
     }
@@ -68,6 +83,10 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
 
     fn send(&self, event: TracingEvent) {
         (self.on_event)(event);
+    }
+
+    fn span_stack(&self) -> cell::Ref<'_, SpanStack> {
+        self.current_spans.get_or_default().borrow()
     }
 }
 
@@ -88,7 +107,12 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
     fn new_span(&self, span: &Attributes<'_>) -> Id {
         let metadata_id = Self::metadata_id(span.metadata());
         let span_id = u64::from(self.next_span_id.fetch_add(1, Ordering::SeqCst));
-        self.send(TracingEvent::new_span(span, metadata_id, span_id));
+        self.send(TracingEvent::new_span(
+            span,
+            || self.span_stack().current().map(Id::into_u64),
+            metadata_id,
+            span_id,
+        ));
         Id::from_u64(span_id)
     }
 
@@ -105,16 +129,29 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
 
     fn event(&self, event: &Event<'_>) {
         let metadata_id = Self::metadata_id(event.metadata());
-        self.send(TracingEvent::new_event(event, metadata_id));
+        self.send(TracingEvent::new_event(
+            event,
+            || self.span_stack().current().map(Id::into_u64),
+            metadata_id,
+        ));
     }
 
     fn enter(&self, span: &Id) {
+        self.current_spans
+            .get_or_default()
+            .borrow_mut()
+            .push(span.clone());
+
         self.send(TracingEvent::SpanEntered {
             id: span.into_u64(),
         });
     }
 
     fn exit(&self, span: &Id) {
+        if let Some(spans) = self.current_spans.get() {
+            spans.borrow_mut().pop(span);
+        }
+
         self.send(TracingEvent::SpanExited {
             id: span.into_u64(),
         });
