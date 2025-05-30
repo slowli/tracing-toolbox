@@ -209,7 +209,7 @@ fn persisting_metadata() {
     assert!(names.contains("compute"), "{names:?}");
 
     // Check that `receiver` can function after restoring `persisted` meta.
-    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans, None);
     tracing::subscriber::with_default(create_fmt_subscriber(), || {
         for event in events {
             if !matches!(event, TracingEvent::NewCallSite { .. }) {
@@ -249,7 +249,8 @@ fn test_persisting_spans(reset_local_spans: bool) {
                 local_spans = LocalSpans::default();
             }
 
-            let mut receiver = TracingEventReceiver::new(metadata.clone(), spans, local_spans);
+            let mut receiver =
+                TracingEventReceiver::new(metadata.clone(), spans, local_spans, None);
             for event in events {
                 receiver.receive(event.clone());
             }
@@ -363,6 +364,7 @@ fn sender_concurrent_threads() {
     Lazy::force(&EVENTS);
 
     struct EventVerifier {
+        expected_root: Arc<Mutex<Option<tracing::span::Id>>>,
         errors: Arc<Mutex<Vec<String>>>,
     }
     struct SpanThread(String);
@@ -377,6 +379,14 @@ fn sender_concurrent_threads() {
             id: &tracing_core::span::Id,
             ctx: tracing_subscriber::layer::Context<'_, S>,
         ) {
+            let expected_root = self.expected_root.lock().unwrap();
+            let span_parent = ctx.span(id).unwrap().parent().map(|s| s.id());
+            if expected_root.as_ref() != span_parent.as_ref() {
+                self.errors.lock().unwrap().push(format!(
+                    "Span {:?} has unexpected parent: {:?}, expected: {:?}",
+                    id, span_parent, expected_root
+                ));
+            }
             attrs.record(&mut |field: &Field, val: &dyn std::fmt::Debug| {
                 if field.name() == "span_thread" {
                     if let Some(span) = ctx.span(id) {
@@ -418,11 +428,16 @@ fn sender_concurrent_threads() {
 
     let events = sender_events_from_concurrent_threads();
     let event_errors = Arc::new(Mutex::new(Vec::new()));
+    let expected_root = Arc::new(Mutex::new(None));
     tracing::subscriber::with_default(
         tracing_subscriber::Registry::default().with(EventVerifier {
+            expected_root: expected_root.clone(),
             errors: event_errors.clone(),
         }),
         || {
+            let _root_guard = tracing::info_span!("root_span").entered();
+            *expected_root.lock().unwrap() = _root_guard.id();
+
             let mut event_receiver = TracingEventReceiver::default();
             for event in events.iter() {
                 event_receiver.receive(event.clone());

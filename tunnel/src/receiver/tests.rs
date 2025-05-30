@@ -184,7 +184,7 @@ fn restoring_spans() {
     };
     let local_spans = LocalSpans::default();
 
-    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans, None);
     visit_and_drop_span(&mut receiver);
 }
 
@@ -217,7 +217,7 @@ fn restoring_span_after_recording_values() {
     };
     let local_spans = LocalSpans::default();
 
-    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans, None);
     receiver.receive(TracingEvent::ValuesRecorded {
         id: 1,
         values: TracedValues::from_iter([("i".to_owned(), TracedValue::from(42_i64))]),
