@@ -1,6 +1,6 @@
 ---
 source: tunnel/tests/integration/main.rs
-assertion_line: 39
+assertion_line: 40
 expression: events
 ---
 - new_call_site:
@@ -37,6 +37,7 @@ expression: events
       - count
 - new_event:
     metadata_id: 1
+    parent: 1
     values:
       message:
         object: count looks somewhat large
@@ -54,6 +55,7 @@ expression: events
       - count
 - new_span:
     id: 2
+    parent_id: 1
     metadata_id: 2
     values:
       count:
@@ -74,6 +76,7 @@ expression: events
       - current
 - new_event:
     metadata_id: 3
+    parent: 2
     values:
       message:
         object: performing iteration
@@ -83,6 +86,7 @@ expression: events
         u_int: 0
 - new_event:
     metadata_id: 3
+    parent: 2
     values:
       message:
         object: performing iteration
@@ -92,6 +96,7 @@ expression: events
         u_int: 1
 - new_event:
     metadata_id: 3
+    parent: 2
     values:
       message:
         object: performing iteration
@@ -101,6 +106,7 @@ expression: events
         u_int: 1
 - new_event:
     metadata_id: 3
+    parent: 2
     values:
       message:
         object: performing iteration
@@ -110,6 +116,7 @@ expression: events
         u_int: 2
 - new_event:
     metadata_id: 3
+    parent: 2
     values:
       message:
         object: performing iteration
@@ -129,6 +136,7 @@ expression: events
       - return
 - new_event:
     metadata_id: 4
+    parent: 2
     values:
       return:
         object: "5"
@@ -149,6 +157,7 @@ expression: events
       - result
 - new_event:
     metadata_id: 5
+    parent: 1
     values:
       message:
         object: computed Fibonacci number
@@ -158,4 +167,3 @@ expression: events
     id: 1
 - span_dropped:
     id: 1
-

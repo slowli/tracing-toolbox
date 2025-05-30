@@ -106,7 +106,7 @@ fn recorded_span_values_are_restored() {
         },
         TracingEvent::NewEvent {
             metadata_id: 1,
-            parent: None,
+            parent: Some(0),
             values: TracedValues::from_iter([("message".to_owned(), TracedValue::from("test"))]),
         },
         TracingEvent::SpanExited { id: 0 },
@@ -115,7 +115,7 @@ fn recorded_span_values_are_restored() {
     let storage = SharedStorage::default();
     let subscriber = Registry::default().with(CaptureLayer::new(&storage));
     tracing::subscriber::with_default(subscriber, || {
-        let mut receiver = TracingEventReceiver::new(metadata, spans, LocalSpans::default());
+        let mut receiver = TracingEventReceiver::new(metadata, spans, LocalSpans::default(), None);
         for event in more_events {
             receiver.receive(event);
         }
@@ -179,7 +179,7 @@ fn spans_are_exited_on_receiver_drop() {
         TracingEvent::SpanEntered { id: 1 },
         TracingEvent::SpanEntered { id: 0 },
     ];
-    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans);
+    let mut receiver = TracingEventReceiver::new(metadata, spans, local_spans, None);
     for event in more_events {
         receiver.receive(event);
     }
