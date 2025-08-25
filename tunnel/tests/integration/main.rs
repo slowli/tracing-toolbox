@@ -15,7 +15,7 @@ mod fib;
 
 use tracing_tunnel::{
     CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
-    TracingEventReceiver, TracingLevel,
+    TracingEventReceiver, TracingEventSender, TracingLevel,
 };
 
 #[derive(Debug)]
@@ -301,10 +301,69 @@ fn concurrent_senders() {
     }
 }
 
+#[test]
+#[allow(clippy::needless_collect)] // necessary for threads to be concurrent
+fn concurrent_senders_stress_test() {
+    Lazy::force(&EVENTS);
+
+    // Stress test with more threads and rapid span creation to increase
+    // likelihood of race condition between NewCallSite and NewSpan events
+    const NUM_THREADS: usize = 20;
+    const ITERATIONS: usize = 10;
+
+    let threads: Vec<_> = (0..NUM_THREADS)
+        .map(|thread_id| {
+            thread::spawn(move || {
+                // Use single sender per thread to avoid span ID conflicts
+                let (events_sx, events_rx) = std::sync::mpsc::sync_channel(512);
+                let sender = TracingEventSender::new(move |event| {
+                    events_sx.send(event).unwrap();
+                });
+
+                tracing::subscriber::with_default(sender, || {
+                    // Mix of different span types to trigger more callsite registrations
+                    for i in 0..ITERATIONS {
+                        let _span = tracing::info_span!("stress_test", thread_id, iteration = i);
+                        tracing::debug!("stress test event");
+
+                        // Nested spans with different metadata
+                        let _nested = tracing::warn_span!("nested", value = i * 2);
+                        tracing::info!("nested event");
+                    }
+
+                    // Additional rapid span creation
+                    for i in 0..ITERATIONS {
+                        let _rapid = tracing::trace_span!("rapid", count = i);
+                        tracing::error!("rapid event {}", i);
+                    }
+                });
+
+                events_rx.iter().collect()
+            })
+        })
+        .collect();
+
+    let all_events: Vec<Vec<TracingEvent>> = threads
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect();
+
+    // Validate each thread's events individually
+    for (thread_idx, events) in all_events.iter().enumerate() {
+        if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert_valid_refs(events);
+        })) {
+            eprintln!("Thread {} events failed validation", thread_idx);
+            std::panic::resume_unwind(e);
+        }
+        assert_span_management(events);
+    }
+}
+
 fn assert_valid_refs(events: &[TracingEvent]) {
     let mut call_site_ids = HashSet::new();
     let mut span_ids = HashSet::new();
-    for event in events {
+    for (i, event) in events.iter().enumerate() {
         match event {
             TracingEvent::NewCallSite { id, .. } => {
                 call_site_ids.insert(*id);
@@ -314,10 +373,31 @@ fn assert_valid_refs(events: &[TracingEvent]) {
                 id, metadata_id, ..
             } => {
                 assert!(span_ids.insert(*id));
-                assert!(call_site_ids.contains(metadata_id));
+                if !call_site_ids.contains(metadata_id) {
+                    // Enhanced error reporting for potential race condition detection
+                    eprintln!("Event ordering issue detected at event {}: NewSpan references unknown metadata_id {}", i, metadata_id);
+                    eprintln!("Known call site IDs: {:?}", call_site_ids);
+                    eprintln!(
+                        "Event context (events {}..{}):",
+                        i.saturating_sub(3),
+                        (i + 3).min(events.len())
+                    );
+                    for (j, ctx_event) in events[i.saturating_sub(3)..(i + 3).min(events.len())]
+                        .iter()
+                        .enumerate()
+                    {
+                        let event_idx = i.saturating_sub(3) + j;
+                        let marker = if event_idx == i { " >>> " } else { "     " };
+                        eprintln!("{}[{}] {:?}", marker, event_idx, ctx_event);
+                    }
+                    panic!("NewSpan event references unknown metadata ID {}: this may be indicative of a race condition where NewSpan arrived before NewCallSite", metadata_id);
+                }
             }
             TracingEvent::NewEvent { metadata_id, .. } => {
-                assert!(call_site_ids.contains(metadata_id));
+                if !call_site_ids.contains(metadata_id) {
+                    eprintln!("Event ordering issue detected at event {}: NewEvent references unknown metadata_id {}", i, metadata_id);
+                    panic!("NewEvent references unknown metadata ID {}: this may be indicative of a race condition", metadata_id);
+                }
             }
             _ => { /* do nothing */ }
         }
