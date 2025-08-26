@@ -6,6 +6,8 @@ use tracing_core::{
 };
 
 use core::sync::atomic::{AtomicU32, Ordering};
+use std::collections::HashSet;
+use std::sync::Mutex;
 
 use crate::{CallSiteData, MetadataId, RawSpanId, TracedValues, TracingEvent};
 
@@ -51,6 +53,9 @@ impl TracingEvent {
 pub struct TracingEventSender<F = fn(TracingEvent)> {
     next_span_id: AtomicU32,
     on_event: F,
+    /// Track registered callsite IDs to prevent race conditions.
+    /// Uses Mutex to ensure synchronous registration before dependent events.
+    registered_callsites: Mutex<HashSet<MetadataId>>,
 }
 
 impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
@@ -59,6 +64,7 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
         Self {
             next_span_id: AtomicU32::new(1), // 0 is invalid span ID
             on_event,
+            registered_callsites: Mutex::new(HashSet::new()),
         }
     }
 
@@ -69,15 +75,40 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
     fn send(&self, event: TracingEvent) {
         (self.on_event)(event);
     }
+
+    /// Ensures that the callsite for the given metadata is registered.
+    /// This method is synchronous and prevents race conditions where
+    /// NewSpan or NewEvent events arrive before their NewCallSite dependencies.
+    fn ensure_callsite_registered(&self, metadata: &'static Metadata<'static>) {
+        let metadata_id = Self::metadata_id(metadata);
+
+        // Fast path: check if already registered without lock contention
+        {
+            let registered = self.registered_callsites.lock().unwrap();
+            if registered.contains(&metadata_id) {
+                return;
+            }
+        }
+
+        // Slow path: register the callsite
+        let mut registered = self.registered_callsites.lock().unwrap();
+
+        // Double-check in case another thread registered it while we waited for the lock
+        if !registered.contains(&metadata_id) {
+            // Send NewCallSite event before marking as registered
+            self.send(TracingEvent::NewCallSite {
+                id: metadata_id,
+                data: CallSiteData::from(metadata),
+            });
+            registered.insert(metadata_id);
+        }
+    }
 }
 
 impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
     fn register_callsite(&self, metadata: &'static Metadata<'static>) -> Interest {
-        let id = Self::metadata_id(metadata);
-        self.send(TracingEvent::NewCallSite {
-            id,
-            data: CallSiteData::from(metadata),
-        });
+        // Ensure callsite is registered synchronously
+        self.ensure_callsite_registered(metadata);
         Interest::always()
     }
 
@@ -86,6 +117,12 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
     }
 
     fn new_span(&self, span: &Attributes<'_>) -> Id {
+        // Ensure callsite is registered before sending NewSpan event.
+        // Practice shows that the caller may not synchronize its register_callsite calls,
+        // allowing a new_span call to take effect before the registration completes.
+        // We guarantee that references are valid, even when multi-threaded.
+        self.ensure_callsite_registered(span.metadata());
+
         let metadata_id = Self::metadata_id(span.metadata());
         let span_id = u64::from(self.next_span_id.fetch_add(1, Ordering::SeqCst));
         self.send(TracingEvent::new_span(span, metadata_id, span_id));
@@ -104,6 +141,12 @@ impl<F: Fn(TracingEvent) + 'static> Subscriber for TracingEventSender<F> {
     }
 
     fn event(&self, event: &Event<'_>) {
+        // Ensure callsite is registered before sending NewEvent.
+        // Practice shows that the caller may not synchronize its register_callsite calls,
+        // allowing an event call to take effect before the registration completes.
+        // We guarantee that references are valid, even when multi-threaded.
+        self.ensure_callsite_registered(event.metadata());
+
         let metadata_id = Self::metadata_id(event.metadata());
         self.send(TracingEvent::new_event(event, metadata_id));
     }
