@@ -225,7 +225,7 @@ fn assert_captured_spans(storage: &Storage) {
         assert_eq!(event.message(), Some("performing iteration"));
         assert_eq!(event["i"], i as u64);
     }
-    let return_event = fib_span.events().last().unwrap();
+    let return_event = fib_span.events().next_back().unwrap();
     assert_eq!(*return_event.metadata().level(), Level::INFO);
     assert!(return_event["return"].is_debug(&5));
 

@@ -113,7 +113,7 @@ impl<'a, P: Predicate<TracedValue>, T: Captured<'a>> Predicate<T> for FieldPredi
     fn eval(&self, variable: &T) -> bool {
         variable
             .value(self.name)
-            .map_or(false, |value| self.matches.eval(value))
+            .is_some_and(|value| self.matches.eval(value))
     }
 
     fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {
@@ -240,7 +240,7 @@ where
     P: Predicate<T>,
 {
     fn eval(&self, variable: &TracedValue) -> bool {
-        T::from_value(variable).map_or(false, |value| self.matches.eval(value.borrow()))
+        T::from_value(variable).is_some_and(|value| self.matches.eval(value.borrow()))
     }
 
     fn find_case(&self, expected: bool, variable: &TracedValue) -> Option<Case<'_>> {
@@ -323,7 +323,7 @@ impl<P: Predicate<str>> Predicate<CapturedEvent<'_>> for MessagePredicate<P> {
     fn eval(&self, variable: &CapturedEvent<'_>) -> bool {
         variable
             .message()
-            .map_or(false, |value| self.matches.eval(value))
+            .is_some_and(|value| self.matches.eval(value))
     }
 
     fn find_case(&self, expected: bool, variable: &CapturedEvent<'_>) -> Option<Case<'_>> {

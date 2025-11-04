@@ -51,9 +51,7 @@ impl Predicate<str> for TargetStrPredicate<'_> {
     fn eval(&self, variable: &str) -> bool {
         variable
             .strip_prefix(self.prefix)
-            .map_or(false, |stripped| {
-                stripped.is_empty() || stripped.starts_with("::")
-            })
+            .is_some_and(|stripped| stripped.is_empty() || stripped.starts_with("::"))
     }
 
     fn find_case(&self, expected: bool, variable: &str) -> Option<Case<'_>> {
