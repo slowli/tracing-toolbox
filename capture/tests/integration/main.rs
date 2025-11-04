@@ -1,22 +1,21 @@
 //! Integration tests for tracing capture.
 
-use assert_matches::assert_matches;
-use predicates::ord::eq;
-use tracing_core::{Level, LevelFilter};
-use tracing_subscriber::{layer::SubscriberExt, Registry};
-
 use std::{borrow::Cow, panic, thread, time::Duration};
 
-mod fib;
-
+use assert_matches::assert_matches;
+use predicates::ord::eq;
 use tracing_capture::{
     predicates::{ancestor, field, level, message, name, parent, ScanExt},
     CaptureLayer, SharedStorage, Storage,
 };
+use tracing_core::{Level, LevelFilter};
+use tracing_subscriber::{layer::SubscriberExt, Registry};
 use tracing_tunnel::{
     CallSiteData, CallSiteKind, LocalSpans, TracedValue, TracedValues, TracingEvent,
     TracingEventReceiver, TracingLevel,
 };
+
+mod fib;
 
 const CALL_SITE_DATA: CallSiteData = CallSiteData {
     kind: CallSiteKind::Span,

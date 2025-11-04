@@ -1,11 +1,11 @@
 //! `target()` predicate factory.
 
+use std::fmt;
+
 use predicates::{
     reflection::{Case, PredicateReflection, Product},
     Predicate,
 };
-
-use std::fmt;
 
 use crate::Captured;
 

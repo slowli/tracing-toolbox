@@ -152,6 +152,20 @@
 #![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
 
 #[cfg(feature = "receiver")]
+pub use crate::receiver::{
+    LocalSpans, PersistedMetadata, PersistedSpans, ReceiveError, TracingEventReceiver,
+};
+#[cfg(feature = "sender")]
+pub use crate::sender::TracingEventSender;
+#[cfg(feature = "std")]
+pub use crate::value::TracedError;
+pub use crate::{
+    types::{CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracingEvent, TracingLevel},
+    value::{DebugObject, FromTracedValue, TracedValue},
+    values::{TracedValues, TracedValuesIter},
+};
+
+#[cfg(feature = "receiver")]
 #[cfg_attr(docsrs, doc(cfg(feature = "receiver")))]
 mod receiver;
 #[cfg(feature = "sender")]
@@ -165,9 +179,6 @@ mod values;
 mod alloc {
     #[cfg(not(feature = "std"))]
     extern crate alloc;
-    #[cfg(feature = "std")]
-    use std as alloc;
-
     pub use alloc::{
         borrow::{Cow, ToOwned},
         collections::BTreeMap,
@@ -176,21 +187,9 @@ mod alloc {
         string::String,
         vec::{self, Vec},
     };
+    #[cfg(feature = "std")]
+    use std as alloc;
 }
-
-#[cfg(feature = "receiver")]
-pub use crate::receiver::{
-    LocalSpans, PersistedMetadata, PersistedSpans, ReceiveError, TracingEventReceiver,
-};
-#[cfg(feature = "sender")]
-pub use crate::sender::TracingEventSender;
-#[cfg(feature = "std")]
-pub use crate::value::TracedError;
-pub use crate::{
-    types::{CallSiteData, CallSiteKind, MetadataId, RawSpanId, TracingEvent, TracingLevel},
-    value::{DebugObject, FromTracedValue, TracedValue},
-    values::{TracedValues, TracedValuesIter},
-};
 
 #[cfg(doctest)]
 doc_comment::doctest!("../README.md");

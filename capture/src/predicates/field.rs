@@ -1,14 +1,14 @@
 //! `field()` and `message()` predicate factories.
 
+use std::{any::type_name, borrow::Borrow, fmt, marker::PhantomData};
+
 use predicates::{
     reflection::{Case, PredicateReflection, Product},
     Predicate,
 };
-
-use std::{any::type_name, borrow::Borrow, fmt, marker::PhantomData};
+use tracing_tunnel::{FromTracedValue, TracedValue};
 
 use crate::{Captured, CapturedEvent};
-use tracing_tunnel::{FromTracedValue, TracedValue};
 
 /// Conversion into a predicate for a [`TracedValue`] used in the [`field()`] function.
 pub trait IntoFieldPredicate {

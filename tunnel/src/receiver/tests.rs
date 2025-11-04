@@ -1,8 +1,8 @@
 //! Tests for tracing event receiver.
 
-use assert_matches::assert_matches;
-
 use std::borrow::Cow;
+
+use assert_matches::assert_matches;
 
 use super::*;
 use crate::{CallSiteKind, TracingLevel};

@@ -1,11 +1,11 @@
 //! `parent()` predicate factory.
 
+use std::{fmt, iter};
+
 use predicates::{
     reflection::{Case, PredicateReflection, Product},
     Predicate,
 };
-
-use std::{fmt, iter};
 
 use crate::{Captured, CapturedSpan};
 

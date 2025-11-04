@@ -1,11 +1,11 @@
 //! Client-side subscriber.
 
+use core::sync::atomic::{AtomicU32, Ordering};
+
 use tracing_core::{
     span::{Attributes, Id, Record},
     Event, Interest, Metadata, Subscriber,
 };
-
-use core::sync::atomic::{AtomicU32, Ordering};
 
 use crate::{CallSiteData, MetadataId, RawSpanId, TracedValues, TracingEvent};
 

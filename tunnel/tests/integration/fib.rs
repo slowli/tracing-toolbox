@@ -1,7 +1,6 @@
-use tracing::field;
-
 use std::{error, fmt, sync::mpsc};
 
+use tracing::field;
 use tracing_tunnel::{TracingEvent, TracingEventSender};
 
 #[derive(Debug)]

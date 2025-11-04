@@ -1,8 +1,8 @@
 //! Extension trait for asserting against collections of `CapturedEvent`s and `CapturedSpan`s.
 
-use predicates::Predicate;
-
 use std::fmt;
+
+use predicates::Predicate;
 
 use crate::{CapturedEvent, CapturedEvents, CapturedSpan, CapturedSpans, DescendantSpans, Storage};
 

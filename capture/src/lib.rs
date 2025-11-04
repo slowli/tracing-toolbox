@@ -60,20 +60,19 @@
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
 
-use tracing_core::Metadata;
-
 use std::{cmp, fmt, ops, ptr};
 
-mod iter;
-mod layer;
-pub mod predicates;
+use tracing_core::Metadata;
+use tracing_tunnel::{TracedValue, TracedValues};
 
 pub use crate::{
     iter::{CapturedEvents, CapturedSpans, DescendantEvents, DescendantSpans},
     layer::{CaptureLayer, SharedStorage, Storage},
 };
 
-use tracing_tunnel::{TracedValue, TracedValues};
+mod iter;
+mod layer;
+pub mod predicates;
 
 mod sealed {
     pub trait Sealed {}
