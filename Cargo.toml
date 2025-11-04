@@ -29,3 +29,14 @@ version-sync = "0.9.4"
 
 # Workspace dependencies
 tracing-tunnel = { version = "=0.2.0-beta.1", path = "tunnel" }
+
+[workspace.lints.rust]
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+must_use_candidate = "allow"
+module_name_repetitions = "allow"

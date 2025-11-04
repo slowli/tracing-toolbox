@@ -146,10 +146,6 @@
 // Documentation settings.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_root_url = "https://docs.rs/tracing-tunnel/0.2.0-beta.1")]
-// Linter settings.
-#![warn(missing_debug_implementations, missing_docs, bare_trait_objects)]
-#![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
 
 #[cfg(feature = "receiver")]
 pub use crate::receiver::{
@@ -179,7 +175,7 @@ mod values;
 mod alloc {
     #[cfg(not(feature = "std"))]
     extern crate alloc;
-    pub use alloc::{
+    pub(crate) use alloc::{
         borrow::{Cow, ToOwned},
         collections::BTreeMap,
         // ^ `HashMap` would work better, but it's not present in `alloc`

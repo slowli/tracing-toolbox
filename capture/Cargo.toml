@@ -31,3 +31,6 @@ tracing-subscriber = { workspace = true, features = ["default"] }
 version-sync.workspace = true
 
 tracing-tunnel = { workspace = true, features = ["sender", "receiver"] }
+
+[lints]
+workspace = true
