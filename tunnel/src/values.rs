@@ -1,5 +1,7 @@
 //! `TracedValues` and closely related types.
 
+use core::{fmt, mem, ops, slice};
+
 use serde::{
     de::{MapAccess, Visitor},
     ser::SerializeMap,
@@ -10,8 +12,6 @@ use tracing_core::{
     span::Record,
     Event,
 };
-
-use core::{fmt, mem, ops, slice};
 
 use crate::{
     alloc::{vec, String, Vec},

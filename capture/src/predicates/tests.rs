@@ -10,10 +10,10 @@ use predicates::{
 use tracing_core::{
     callsite::DefaultCallsite, field::FieldSet, Kind, Level, LevelFilter, Metadata,
 };
+use tracing_tunnel::{TracedValue, TracedValues};
 
 use super::*;
 use crate::Storage;
-use tracing_tunnel::{TracedValue, TracedValues};
 
 static SITE: DefaultCallsite = DefaultCallsite::new(METADATA);
 static METADATA: &Metadata<'static> = &Metadata::new(

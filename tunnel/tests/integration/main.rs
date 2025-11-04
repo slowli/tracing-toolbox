@@ -1,22 +1,21 @@
 //! Integration tests for Tardigrade tracing infrastructure.
 
-use assert_matches::assert_matches;
-use once_cell::sync::Lazy;
-use tracing_core::{Level, Subscriber};
-use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
-
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     iter, thread,
 };
 
-mod fib;
-
+use assert_matches::assert_matches;
+use once_cell::sync::Lazy;
+use tracing_core::{Level, Subscriber};
+use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
 use tracing_tunnel::{
     CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
     TracingEventReceiver, TracingLevel,
 };
+
+mod fib;
 
 #[derive(Debug)]
 struct RecordedEvents {

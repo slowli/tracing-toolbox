@@ -1,5 +1,10 @@
 //! `CaptureLayer` and related types.
 
+use std::{
+    fmt, ops,
+    sync::{Arc, RwLock},
+};
+
 use id_arena::Arena;
 use tracing_core::{
     span::{Attributes, Id, Record},
@@ -10,17 +15,12 @@ use tracing_subscriber::{
     registry::LookupSpan,
     Layer,
 };
-
-use std::{
-    fmt, ops,
-    sync::{Arc, RwLock},
-};
+use tracing_tunnel::TracedValues;
 
 use crate::{
     CapturedEvent, CapturedEventId, CapturedEventInner, CapturedEvents, CapturedSpan,
     CapturedSpanId, CapturedSpanInner, CapturedSpans, SpanStats,
 };
-use tracing_tunnel::TracedValues;
 
 /// Storage of captured tracing information.
 ///

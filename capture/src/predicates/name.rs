@@ -1,11 +1,11 @@
 //! `name()` predicate factory.
 
+use std::fmt;
+
 use predicates::{
     reflection::{Case, PredicateReflection},
     Predicate,
 };
-
-use std::fmt;
 
 use crate::CapturedSpan;
 
