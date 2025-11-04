@@ -16,12 +16,12 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 # Public dependencies (present in the public API of the crate).
-predicates = { version = "3.1.3", default-features = false }
+predicates.workspace = true
 tracing-core.workspace = true
 tracing-subscriber = { workspace = true, features = ["std", "registry"] }
 # Private dependencies.
-id-arena = "2.2.1"
-tracing-tunnel = { version = "0.2.0-beta.1", path = "../tunnel" }
+id-arena.workspace = true
+tracing-tunnel.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true
@@ -30,4 +30,4 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["default"] }
 version-sync.workspace = true
 
-tracing-tunnel = { version = "0.2.0-beta.1", path = "../tunnel", features = ["sender", "receiver"] }
+tracing-tunnel = { workspace = true, features = ["sender", "receiver"] }
