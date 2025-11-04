@@ -1,0 +1,105 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Tunnelling tracing information across an API boundary."><title>tracing_tunnel - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tracing_tunnel" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0-nightly (bd3ac0330 2025-11-01)" data-channel="nightly" data-search-js="search-5c29b3b5.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate tracing_tunnel</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tracing_tunnel/index.html">tracing_<wbr>tunnel</a><span class="version">0.2.0-beta.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#when-is-this-needed" title="When is this needed?">When is this needed?</a><ul><li><a href="#use-case-workflow-automation" title="Use case: workflow automation">Use case: workflow automation</a></li></ul></li><li><a href="#crate-features" title="Crate features">Crate features</a><ul><li><a href="#std" title="`std`"><code>std</code></a></li><li><a href="#sender" title="`sender`"><code>sender</code></a></li><li><a href="#receiver" title="`receiver`"><code>receiver</code></a></li></ul></li><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#sending-events-with-tracingeventsender" title="Sending events with `TracingEventSender`">Sending events with <code>TracingEventSender</code></a></li><li><a href="#receiving-events-from-tracingeventreceiver" title="Receiving events from `TracingEventReceiver`">Receiving events from <code>TracingEventReceiver</code></a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>tracing_<wbr>tunnel</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/tracing_tunnel/lib.rs.html#1-191">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Tunnelling tracing information across an API boundary.</p>
+<p>This crate provides <a href="https://docs.rs/tracing/0.1/tracing">tracing</a> infrastructure helpers allowing to transfer tracing events
+across an API boundary:</p>
+<ul>
+<li><a href="struct.TracingEventSender.html" title="struct tracing_tunnel::TracingEventSender"><code>TracingEventSender</code></a> is a tracing <a href="tracing_core::Subscriber"><code>Subscriber</code></a> that converts tracing events
+into (de)serializable presentation that can be sent elsewhere using a customizable hook.</li>
+<li><a href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver"><code>TracingEventReceiver</code></a> consumes events produced by a <code>TracingEventSender</code> and relays them
+to the tracing infrastructure. It is assumed that the source of events may outlive
+both the lifetime of a particular <code>TracingEventReceiver</code> instance, and the lifetime
+of the program encapsulating the receiver. To deal with this, the receiver provides
+the means to persist / restore its state.</li>
+</ul>
+<h2 id="when-is-this-needed"><a class="doc-anchor" href="#when-is-this-needed">§</a>When is this needed?</h2>
+<p>This crate solves the problem of having <em>dynamic</em> call sites for tracing
+spans / events, i.e., ones not known during compilation. This may occur if call sites
+are defined in dynamically loaded modules, the execution of which is embedded into the program,
+e.g., WASM modules.</p>
+<p>It <em>could</em> be feasible to treat such a module as a separate program and
+collect / analyze its traces in conjunction with host traces using distributed tracing software
+(e.g., <a href="https://opentelemetry.io/">OpenTelemetry</a> / <a href="https://www.jaegertracing.io/">Jaeger</a>). However, this would significantly bloat the API surface
+of the module, bloat its dependency tree, and would arguably break encapsulation.</p>
+<p>The approach proposed in this crate keeps the module API as simple as possible: essentially,
+a single function to smuggle <a href="enum.TracingEvent.html" title="enum tracing_tunnel::TracingEvent"><code>TracingEvent</code></a>s through the client–host boundary.
+The client side (i.e., the <a href="struct.TracingEventSender.html" title="struct tracing_tunnel::TracingEventSender"><code>TracingEventSender</code></a>) is almost stateless;
+it just streams tracing events to the host, which can have tracing logic as complex as required.</p>
+<p>Another problem that this crate solves is having module executions that can outlive
+the host program. For example, WASM module instances can be fully persisted and resumed later,
+potentially after the host is restarted. To solve this, <a href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver"><code>TracingEventReceiver</code></a> allows
+persisting call site data and alive spans, and resuming from the previously saved state
+(notifying the tracing infra about call sites / spans if necessary).</p>
+<h3 id="use-case-workflow-automation"><a class="doc-anchor" href="#use-case-workflow-automation">§</a>Use case: workflow automation</h3>
+<p>Both components are used by the <a href="https://github.com/slowli/tardigrade">Tardigrade</a> workflows, in case of which
+the API boundary is the WASM client–host boundary.</p>
+<ul>
+<li>The <a href="https://github.com/slowli/tardigrade"><code>tardigrade</code></a> client library uses <a href="struct.TracingEventSender.html" title="struct tracing_tunnel::TracingEventSender"><code>TracingEventSender</code></a> to send tracing events
+from a workflow (i.e., a WASM module instance) to the host using a WASM import function.</li>
+<li><a href="https://github.com/slowli/tardigrade">The Tardigrade runtime</a> uses <a href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver"><code>TracingEventReceiver</code></a> to pass traces from the workflow
+to the host tracing infrastructure.</li>
+</ul>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<p>Each of the two major features outlined above is gated by the corresponding opt-in feature,
+<a href="#sender"><code>sender</code></a> and <a href="#receiver"><code>receiver</code></a>.
+Without these features enabled, the crate only provides data types to capture tracing data.</p>
+<h3 id="std"><a class="doc-anchor" href="#std">§</a><code>std</code></h3>
+<p><em>(On by default)</em></p>
+<p>Enables support of types from <code>std</code>, such as the <code>Error</code> trait. Propagates to <a href="https://docs.rs/tracing-core/0.1/tracing_core"><code>tracing-core</code></a>,
+enabling <code>Error</code> support there.</p>
+<p>Even if this feature is off, the crate requires the global allocator (i.e., the <code>alloc</code> crate)
+and <code>u32</code> atomics.</p>
+<h3 id="sender"><a class="doc-anchor" href="#sender">§</a><code>sender</code></h3>
+<p><em>(Off by default)</em></p>
+<p>Provides <a href="struct.TracingEventSender.html" title="struct tracing_tunnel::TracingEventSender"><code>TracingEventSender</code></a>.</p>
+<h3 id="receiver"><a class="doc-anchor" href="#receiver">§</a><code>receiver</code></h3>
+<p><em>(Off by default; requires <code>std</code>)</em></p>
+<p>Provides <a href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver"><code>TracingEventReceiver</code></a> and related types.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="sending-events-with-tracingeventsender"><a class="doc-anchor" href="#sending-events-with-tracingeventsender">§</a>Sending events with <code>TracingEventSender</code></h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_tunnel::{TracingEvent, TracingEventSender, TracingEventReceiver};
+
+<span class="comment">// Let's collect tracing events using an MPSC channel.
+</span><span class="kw">let </span>(events_sx, events_rx) = mpsc::sync_channel(<span class="number">10</span>);
+<span class="kw">let </span>subscriber = TracingEventSender::new(<span class="kw">move </span>|event| {
+    events_sx.send(event).ok();
+});
+
+tracing::subscriber::with_default(subscriber, || {
+    <span class="macro">tracing::info_span!</span>(<span class="string">"test"</span>, num = <span class="number">42_i64</span>).in_scope(|| {
+        <span class="macro">tracing::warn!</span>(<span class="string">"I feel disturbance in the Force..."</span>);
+    });
+});
+
+<span class="kw">let </span>events: Vec&lt;<span class="kw">_</span>&gt; = events_rx.iter().collect();
+<span class="macro">assert!</span>(!events.is_empty());
+<span class="comment">// There should be one "new span".
+</span><span class="kw">let </span>span_count = events
+    .iter()
+    .filter(|event| <span class="macro">matches!</span>(event, TracingEvent::NewSpan { .. }))
+    .count();
+<span class="macro">assert_eq!</span>(span_count, <span class="number">1</span>);</code></pre></div><h3 id="receiving-events-from-tracingeventreceiver"><a class="doc-anchor" href="#receiving-events-from-tracingeventreceiver">§</a>Receiving events from <code>TracingEventReceiver</code></h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>tracing_subscriber::fmt().pretty().init();
+
+<span class="kw">let </span>events: Vec&lt;TracingEvent&gt; = <span class="comment">// ...
+
+</span><span class="kw">let </span><span class="kw-2">mut </span>spans = PersistedSpans::default();
+<span class="kw">let </span><span class="kw-2">mut </span>local_spans = LocalSpans::default();
+<span class="comment">// Replay `events` using the default subscriber.
+</span><span class="kw">let </span><span class="kw-2">mut </span>receiver = TracingEventReceiver::default();
+<span class="kw">for </span>event <span class="kw">in </span>events {
+    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = receiver.try_receive(event) {
+        <span class="macro">tracing::warn!</span>(%err, <span class="string">"received invalid tracing event"</span>);
+    }
+}
+<span class="comment">// Persist the resulting receiver state. There are two pieces
+// of the state: metadata and alive spans.
+</span><span class="kw">let </span>metadata = receiver.persist_metadata();
+<span class="kw">let </span>(spans, local_spans) = receiver.persist();
+<span class="comment">// `metadata` can be shared among multiple executions of the same executable
+// (e.g., a WASM module).
+// `spans` and `local_spans` are specific to the execution; `spans` should
+// be persisted, while `local_spans` should be stored in RAM.</span></code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.CallSiteData.html" title="struct tracing_tunnel::CallSiteData">Call<wbr>Site<wbr>Data</a></dt><dd>Data for a single tracing call site: either a span definition, or an event definition.</dd><dt><a class="struct" href="struct.DebugObject.html" title="struct tracing_tunnel::DebugObject">Debug<wbr>Object</a></dt><dd>Opaque wrapper for a <a href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug"><code>Debug</code></a>gable object recorded as a value
+in a tracing span or event.</dd><dt><a class="struct" href="struct.LocalSpans.html" title="struct tracing_tunnel::LocalSpans">Local<wbr>Spans</a><wbr><span class="stab portability" title="Available on crate feature `receiver` only"><code>receiver</code></span></dt><dd><a href="tracing_core::Subscriber"><code>Subscriber</code></a>-specific information about tracing spans for a particular execution
+(e.g., a WASM module instance).</dd><dt><a class="struct" href="struct.PersistedMetadata.html" title="struct tracing_tunnel::PersistedMetadata">Persisted<wbr>Metadata</a><wbr><span class="stab portability" title="Available on crate feature `receiver` only"><code>receiver</code></span></dt><dd>Information about span / event [<code>Metadata</code>] that is <a href="https://docs.rs/serde/1/serde">serializable</a> and thus
+can be persisted across multiple <a href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver"><code>TracingEventReceiver</code></a> lifetimes.</dd><dt><a class="struct" href="struct.PersistedSpans.html" title="struct tracing_tunnel::PersistedSpans">Persisted<wbr>Spans</a><wbr><span class="stab portability" title="Available on crate feature `receiver` only"><code>receiver</code></span></dt><dd>Information about alive tracing spans for a particular execution that is (de)serializable and
+can be persisted across multiple <a href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver"><code>TracingEventReceiver</code></a> lifetimes.</dd><dt><a class="struct" href="struct.TracedError.html" title="struct tracing_tunnel::TracedError">Traced<wbr>Error</a><wbr><span class="stab portability" title="Available on crate feature `std` only"><code>std</code></span></dt><dd>(De)serializable presentation for an error recorded as a value in a tracing span or event.</dd><dt><a class="struct" href="struct.TracedValues.html" title="struct tracing_tunnel::TracedValues">Traced<wbr>Values</a></dt><dd>Collection of named <a href="enum.TracedValue.html" title="enum tracing_tunnel::TracedValue"><code>TracedValue</code></a>s.</dd><dt><a class="struct" href="struct.TracedValuesIter.html" title="struct tracing_tunnel::TracedValuesIter">Traced<wbr>Values<wbr>Iter</a></dt><dd>Iterator over name-value references returned from <a href="struct.TracedValues.html#method.iter" title="method tracing_tunnel::TracedValues::iter"><code>TracedValues::iter()</code></a>.</dd><dt><a class="struct" href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver">Tracing<wbr>Event<wbr>Receiver</a><wbr><span class="stab portability" title="Available on crate feature `receiver` only"><code>receiver</code></span></dt><dd>Receiver of <a href="enum.TracingEvent.html" title="enum tracing_tunnel::TracingEvent"><code>TracingEvent</code></a>s produced by <a href="struct.TracingEventSender.html" title="struct tracing_tunnel::TracingEventSender"><code>TracingEventSender</code></a> that relays them
+to the tracing infrastructure.</dd><dt><a class="struct" href="struct.TracingEventSender.html" title="struct tracing_tunnel::TracingEventSender">Tracing<wbr>Event<wbr>Sender</a><wbr><span class="stab portability" title="Available on crate feature `sender` only"><code>sender</code></span></dt><dd>Tracing [<code>Subscriber</code>] that converts tracing events into (de)serializable <a href="enum.TracingEvent.html" title="enum tracing_tunnel::TracingEvent">presentation</a>
+that can be sent elsewhere using a customizable hook.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.CallSiteKind.html" title="enum tracing_tunnel::CallSiteKind">Call<wbr>Site<wbr>Kind</a></dt><dd>Kind of <a href="struct.CallSiteData.html" title="struct tracing_tunnel::CallSiteData"><code>CallSiteData</code></a> location: either a span, or an event.</dd><dt><a class="enum" href="enum.ReceiveError.html" title="enum tracing_tunnel::ReceiveError">Receive<wbr>Error</a><wbr><span class="stab portability" title="Available on crate feature `receiver` only"><code>receiver</code></span></dt><dd>Error processing a <a href="enum.TracingEvent.html" title="enum tracing_tunnel::TracingEvent"><code>TracingEvent</code></a> by a <a href="struct.TracingEventReceiver.html" title="struct tracing_tunnel::TracingEventReceiver"><code>TracingEventReceiver</code></a>.</dd><dt><a class="enum" href="enum.TracedValue.html" title="enum tracing_tunnel::TracedValue">Traced<wbr>Value</a></dt><dd>Value recorded in a tracing span or event.</dd><dt><a class="enum" href="enum.TracingEvent.html" title="enum tracing_tunnel::TracingEvent">Tracing<wbr>Event</a></dt><dd>Event produced during tracing.</dd><dt><a class="enum" href="enum.TracingLevel.html" title="enum tracing_tunnel::TracingLevel">Tracing<wbr>Level</a></dt><dd>Tracing level defined in <a href="struct.CallSiteData.html" title="struct tracing_tunnel::CallSiteData"><code>CallSiteData</code></a>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.FromTracedValue.html" title="trait tracing_tunnel::FromTracedValue">From<wbr>Traced<wbr>Value</a></dt><dd>Fallible conversion from a <a href="enum.TracedValue.html" title="enum tracing_tunnel::TracedValue"><code>TracedValue</code></a> reference.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.MetadataId.html" title="type tracing_tunnel::MetadataId">Metadata<wbr>Id</a></dt><dd>ID of a tracing [<code>Metadata</code>] record as used in <a href="enum.TracingEvent.html" title="enum tracing_tunnel::TracingEvent"><code>TracingEvent</code></a>s.</dd><dt><a class="type" href="type.RawSpanId.html" title="type tracing_tunnel::RawSpanId">RawSpan<wbr>Id</a></dt><dd>ID of a tracing span as used in <a href="enum.TracingEvent.html" title="enum tracing_tunnel::TracingEvent"><code>TracingEvent</code></a>s.</dd></dl></section></div></main></body></html>
