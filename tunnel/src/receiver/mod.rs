@@ -256,6 +256,7 @@ pub struct TracingEventReceiver {
     metadata: HashMap<MetadataId, &'static Metadata<'static>>,
     spans: PersistedSpans,
     local_spans: LocalSpans,
+    root_span: Option<Id>,
     current_execution: CurrentExecution,
 }
 
@@ -276,12 +277,14 @@ impl TracingEventReceiver {
         metadata: PersistedMetadata,
         spans: PersistedSpans,
         local_spans: LocalSpans,
+        root_span: Option<Id>,
     ) -> Self {
         let mut this = Self {
             metadata: HashMap::new(),
             spans,
             local_spans,
             current_execution: CurrentExecution::default(),
+            root_span,
         };
 
         for (id, data) in metadata.inner {
@@ -400,8 +403,10 @@ impl TracingEventReceiver {
         let value_set = Self::create_values(metadata.fields(), &value_set);
         let attributes = if let Some(local_parent_id) = local_parent_id {
             Attributes::child_of(local_parent_id.clone(), metadata, &value_set)
+        } else if let Some(id) = self.root_span.as_ref() {
+            Attributes::child_of(id.clone(), metadata, &value_set)
         } else {
-            Attributes::new(metadata, &value_set)
+            Attributes::new_root(metadata, &value_set)
         };
 
         Ok(Self::dispatch(|dispatch| dispatch.new_span(&attributes)))
@@ -521,11 +526,11 @@ impl TracingEventReceiver {
                 let values = Self::expand_fields(&values);
                 let values = Self::create_values(metadata.fields(), &values);
                 let parent = parent.map(|id| self.map_span_id(id)).transpose()?.flatten();
-                let event = if let Some(parent) = parent {
-                    Event::new_child_of(parent.clone(), metadata, &values)
-                } else {
-                    Event::new(metadata, &values)
-                };
+                let event = Event::new_child_of(
+                    parent.or(self.root_span.as_ref()).cloned(),
+                    metadata,
+                    &values,
+                );
                 Self::dispatch(|dispatch| dispatch.event(&event));
             }
         }
