@@ -42,7 +42,7 @@ impl TracingEvent {
 
 /// Event synchronization used by [`TracingEventSender`].
 ///
-/// Synchronization must be necessary in a multithreaded environments, where events may arrive from
+/// Synchronization might be necessary in a multithreaded environments, where events may arrive from
 /// different threads out of order. This functionality is encapsulated in the (`std`-dependent) [`Synced`]
 /// implementation.
 ///
@@ -110,10 +110,6 @@ pub struct TracingEventSender<F = fn(TracingEvent), S = ()> {
     sync: S,
 }
 
-/// [`TracingEventSender`] variation with synchronized event processing. Most fitting for multithreaded environments.
-#[cfg(feature = "std")]
-pub type SyncTracingEventSender<F = fn(TracingEvent)> = TracingEventSender<F, Synced>;
-
 impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
     /// Creates a subscriber with the specified "on event" hook.
     pub fn new(on_event: F) -> Self {
@@ -126,7 +122,7 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
 }
 
 #[cfg(feature = "std")]
-impl<F: Fn(TracingEvent) + 'static> SyncTracingEventSender<F> {
+impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F, Synced> {
     /// Creates a subscriber with the specified "on event" hook and synchronized event processing.
     pub fn sync(on_event: F) -> Self {
         Self {
