@@ -1,8 +1,5 @@
 //! Simple string arena.
 
-use once_cell::sync::{Lazy, OnceCell};
-use tracing_core::{field::FieldSet, Callsite, Interest, Kind, Level, Metadata};
-
 use std::{
     borrow::Cow,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
@@ -10,6 +7,9 @@ use std::{
     ops,
     sync::RwLock,
 };
+
+use once_cell::sync::{Lazy, OnceCell};
+use tracing_core::{field::FieldSet, Callsite, Interest, Kind, Level, Metadata};
 
 use crate::types::{CallSiteData, CallSiteKind, TracingLevel};
 

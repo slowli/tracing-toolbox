@@ -44,18 +44,6 @@
 
 use predicates::Predicate;
 
-#[macro_use]
-mod combinators;
-mod ext;
-mod field;
-mod level;
-mod name;
-mod parent;
-mod target;
-
-#[cfg(test)]
-mod tests;
-
 pub use self::{
     combinators::{And, Or},
     ext::{ScanExt, Scanner},
@@ -67,6 +55,17 @@ pub use self::{
     parent::{ancestor, parent, AncestorPredicate, ParentPredicate},
     target::{target, IntoTargetPredicate, TargetPredicate},
 };
+
+#[macro_use]
+mod combinators;
+mod ext;
+mod field;
+mod level;
+mod name;
+mod parent;
+mod target;
+#[cfg(test)]
+mod tests;
 
 /// Converts a predicate into an `Fn(_) -> bool` closure.
 ///

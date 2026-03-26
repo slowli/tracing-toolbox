@@ -1,12 +1,12 @@
 //! `level()` predicate factory.
 
+use std::fmt;
+
 use predicates::{
     reflection::{Case, PredicateReflection},
     Predicate,
 };
 use tracing_core::{Level, LevelFilter};
-
-use std::fmt;
 
 use crate::Captured;
 

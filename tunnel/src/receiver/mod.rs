@@ -1,5 +1,10 @@
 //! `TracingEvent` receiver.
 
+use std::{
+    collections::{HashMap, HashSet},
+    error, fmt, mem,
+};
+
 use serde::{Deserialize, Serialize};
 use tracing_core::{
     dispatcher::{self, Dispatch},
@@ -8,17 +13,12 @@ use tracing_core::{
     Event, Field, Metadata,
 };
 
-use std::{
-    collections::{HashMap, HashSet},
-    error, fmt, mem,
-};
+use self::arena::ARENA;
+use crate::{CallSiteData, MetadataId, RawSpanId, TracedValue, TracedValues, TracingEvent};
 
 mod arena;
 #[cfg(test)]
 mod tests;
-
-use self::arena::ARENA;
-use crate::{CallSiteData, MetadataId, RawSpanId, TracedValue, TracedValues, TracingEvent};
 
 enum CowValue<'a> {
     Borrowed(&'a dyn Value),

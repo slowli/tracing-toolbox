@@ -1,16 +1,16 @@
 //! `TracedValue` and closely related types.
 
-use serde::{Deserialize, Serialize};
-
 use core::{borrow::Borrow, fmt};
+
+use serde::{Deserialize, Serialize};
 
 use crate::alloc::{format, String, ToOwned};
 
 #[cfg(feature = "std")]
 mod error {
-    use serde::{Deserialize, Serialize};
-
     use std::{error, fmt};
+
+    use serde::{Deserialize, Serialize};
 
     /// (De)serializable presentation for an error recorded as a value in a tracing span or event.
     #[derive(Debug, Clone, Serialize, Deserialize)]

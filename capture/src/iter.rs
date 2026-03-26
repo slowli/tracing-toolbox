@@ -1,6 +1,6 @@
-use id_arena::{DefaultArenaBehavior, Id};
-
 use std::{iter::FlatMap, slice};
+
+use id_arena::{DefaultArenaBehavior, Id};
 
 use crate::{CapturedEvent, CapturedEventInner, CapturedSpan, CapturedSpanInner, Storage};
 

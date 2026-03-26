@@ -1,6 +1,6 @@
 # Toolbox for Tracing in Rust
 
-[![Build Status](https://github.com/slowli/tracing-toolbox/workflows/CI/badge.svg?branch=main)](https://github.com/slowli/tracing-toolbox/actions)
+[![Build status](https://github.com/slowli/tracing-toolbox/actions/workflows/ci.yml/badge.svg)](https://github.com/slowli/tracing-toolbox/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/slowli/tracing-toolbox#license)
 
 This repository provides various small(ish) tools for Rust [tracing] infrastructure.

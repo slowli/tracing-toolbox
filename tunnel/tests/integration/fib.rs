@@ -1,7 +1,6 @@
-use tracing::field;
-
 use std::{error, fmt, sync::mpsc};
 
+use tracing::field;
 use tracing_tunnel::{TracingEvent, TracingEventSender};
 
 #[derive(Debug)]
@@ -25,13 +24,13 @@ fn compute(count: usize) -> Result<u64, Overflow> {
     Ok(x)
 }
 
-const PHI: f64 = 1.618033988749895; // (1 + sqrt(5)) / 2
+const PHI: f64 = 1.618_033_988_749_895; // (1 + sqrt(5)) / 2
 
-pub fn fib(count: usize) {
+pub(crate) fn fib(count: usize) {
     let span = tracing::info_span!("fib", approx = field::Empty);
     let _entered = span.enter();
 
-    let approx = PHI.powi(count as i32) / 5.0_f64.sqrt();
+    let approx = PHI.powi(count.try_into().unwrap()) / 5.0_f64.sqrt();
     let approx = approx.round();
     span.record("approx", approx);
 
@@ -46,14 +45,14 @@ pub fn fib(count: usize) {
     }
 }
 
-pub fn record_events(count: usize) -> Vec<TracingEvent> {
-    let (events_sx, events_rx) = mpsc::sync_channel(256);
+pub(crate) fn record_events(count: usize) -> Vec<TracingEvent> {
+    let (events_sender, events_receiver) = mpsc::sync_channel(256);
     // ^ The channel capacity should allow for *all* events since we start collecting events
     // after they all are emitted.
     let sender = TracingEventSender::new(move |event| {
-        events_sx.send(event).unwrap();
+        events_sender.send(event).unwrap();
     });
 
     tracing::subscriber::with_default(sender, || fib(count));
-    events_rx.iter().collect()
+    events_receiver.iter().collect()
 }

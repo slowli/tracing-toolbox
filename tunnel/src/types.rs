@@ -1,11 +1,11 @@
 //! Types to carry tracing events over the WASM client-host boundary.
 
-use serde::{Deserialize, Serialize};
-use tracing_core::{Level, Metadata};
-
 use core::hash::Hash;
 #[cfg(feature = "std")]
 use std::path;
+
+use serde::{Deserialize, Serialize};
+use tracing_core::{Level, Metadata};
 
 use crate::{
     alloc::{BTreeMap, Cow, String, Vec},

@@ -1,6 +1,6 @@
 # Capturing Tracing Spans and Events
 
-[![Build Status](https://github.com/slowli/tracing-toolbox/workflows/CI/badge.svg?branch=main)](https://github.com/slowli/tracing-toolbox/actions)
+[![Build status](https://github.com/slowli/tracing-toolbox/actions/workflows/ci.yml/badge.svg)](https://github.com/slowli/tracing-toolbox/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/slowli/tracing-toolbox#license)
 ![rust 1.74+ required](https://img.shields.io/badge/rust-1.74+-blue.svg?label=Required%20Rust)
 

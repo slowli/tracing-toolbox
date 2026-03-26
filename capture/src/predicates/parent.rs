@@ -1,11 +1,11 @@
 //! `parent()` predicate factory.
 
+use std::{fmt, iter};
+
 use predicates::{
     reflection::{Case, PredicateReflection, Product},
     Predicate,
 };
-
-use std::{fmt, iter};
 
 use crate::{Captured, CapturedSpan};
 
@@ -68,7 +68,7 @@ where
 {
     fn eval(&self, variable: &T) -> bool {
         let parent = variable.parent();
-        parent.map_or(false, |parent| self.matches.eval(&parent))
+        parent.is_some_and(|parent| self.matches.eval(&parent))
     }
 
     fn find_case(&self, expected: bool, variable: &T) -> Option<Case<'_>> {

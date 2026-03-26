@@ -1,11 +1,11 @@
 //! Helper combinators for predicates.
 
+use std::fmt;
+
 use predicates::{
     reflection::{Case, PredicateReflection},
     Predicate,
 };
-
-use std::fmt;
 
 /// Boolean "and" combinator for predicates. Produced by the bitwise and (`&`) operator
 /// on the base predicates from this module.

@@ -1,13 +1,12 @@
 //! Client-side subscriber.
 
+use core::sync::atomic::{AtomicU32, Ordering};
+use std::{collections::HashSet, sync::Mutex};
+
 use tracing_core::{
     span::{Attributes, Id, Record},
     Event, Interest, Metadata, Subscriber,
 };
-
-use core::sync::atomic::{AtomicU32, Ordering};
-use std::collections::HashSet;
-use std::sync::Mutex;
 
 use crate::{CallSiteData, MetadataId, RawSpanId, TracedValues, TracingEvent};
 
@@ -78,7 +77,7 @@ impl<F: Fn(TracingEvent) + 'static> TracingEventSender<F> {
 
     /// Ensures that the callsite for the given metadata is registered.
     /// This method is synchronous and prevents race conditions where
-    /// NewSpan or NewEvent events arrive before their NewCallSite dependencies.
+    /// `NewSpan` or `NewEvent` events arrive before their `NewCallSite` dependencies.
     fn ensure_callsite_registered(&self, metadata: &'static Metadata<'static>) {
         let metadata_id = Self::metadata_id(metadata);
 
