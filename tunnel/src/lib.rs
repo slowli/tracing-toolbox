@@ -152,7 +152,9 @@ pub use crate::receiver::{
     LocalSpans, PersistedMetadata, PersistedSpans, ReceiveError, TracingEventReceiver,
 };
 #[cfg(feature = "sender")]
-pub use crate::sender::TracingEventSender;
+pub use crate::sender::{EventSync, TracingEventSender};
+#[cfg(all(feature = "sender", feature = "std"))]
+pub use crate::sender::{SyncTracingEventSender, Synced};
 #[cfg(feature = "std")]
 pub use crate::value::TracedError;
 pub use crate::{

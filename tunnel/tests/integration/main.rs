@@ -317,7 +317,8 @@ fn concurrent_senders_stress_test() {
             thread::spawn(move || {
                 // Use single sender per thread to avoid span ID conflicts
                 let (events_sender, events_receiver) = mpsc::sync_channel(512);
-                let sender = TracingEventSender::new(move |event| {
+                // Note: the test should fail with the `TracingEventSender::new()` constructor.
+                let sender = TracingEventSender::sync(move |event| {
                     events_sender.send(event).unwrap();
                 });
 
