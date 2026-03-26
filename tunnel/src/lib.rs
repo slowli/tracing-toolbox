@@ -88,7 +88,7 @@
 //! ```
 //! # use assert_matches::assert_matches;
 //! # use std::sync::mpsc;
-//! use tracing_tunnel::{TracingEvent, TracingEventSender, TracingEventReceiver};
+//! use tracing_tunnel::{TracingEvent, TracingEventSender};
 //!
 //! // Let's collect tracing events using an MPSC channel.
 //! let (events_sx, events_rx) = mpsc::sync_channel(10);
@@ -110,6 +110,21 @@
 //!     .filter(|event| matches!(event, TracingEvent::NewSpan { .. }))
 //!     .count();
 //! assert_eq!(span_count, 1);
+//! ```
+//!
+//! In multithreaded environments when tracing events / spans are produced by multiple threads,
+//! you should use `TracingEventSender::sync()` constructor instead of `new()`. This will ensure that
+//! metadata registration events are always emitted before events referencing this metadata.
+//! This requires the `std` crate feature.
+//!
+//! ```
+//! # use tracing_tunnel::{TracingEvent, TracingEventSender};
+//! # use std::sync::mpsc;
+//! let (events_sx, events_rx) = mpsc::sync_channel(10);
+//! let subscriber = TracingEventSender::sync(move |event| {
+//!     events_sx.send(event).ok();
+//! });
+//! // Handle the `subscriber` and `events_rx` in the same way...
 //! ```
 //!
 //! ## Receiving events from `TracingEventReceiver`
@@ -151,8 +166,10 @@
 pub use crate::receiver::{
     LocalSpans, PersistedMetadata, PersistedSpans, ReceiveError, TracingEventReceiver,
 };
+#[cfg(all(feature = "sender", feature = "std"))]
+pub use crate::sender::Synced;
 #[cfg(feature = "sender")]
-pub use crate::sender::TracingEventSender;
+pub use crate::sender::{EventSync, TracingEventSender};
 #[cfg(feature = "std")]
 pub use crate::value::TracedError;
 pub use crate::{

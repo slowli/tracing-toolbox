@@ -3,7 +3,9 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    iter, thread,
+    iter,
+    sync::mpsc,
+    thread,
 };
 
 use assert_matches::assert_matches;
@@ -12,7 +14,7 @@ use tracing_core::{Level, Subscriber};
 use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
 use tracing_tunnel::{
     CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
-    TracingEventReceiver, TracingLevel,
+    TracingEventReceiver, TracingEventSender, TracingLevel,
 };
 
 mod fib;
@@ -300,6 +302,62 @@ fn concurrent_senders() {
     }
 }
 
+#[test]
+#[allow(clippy::needless_collect)] // necessary for threads to be concurrent
+fn concurrent_senders_stress_test() {
+    // Stress test with more threads and rapid span creation to increase
+    // likelihood of race condition between NewCallSite and NewSpan events
+    const NUM_THREADS: usize = 20;
+    const ITERATIONS: usize = 10;
+
+    Lazy::force(&EVENTS);
+
+    let threads: Vec<_> = (0..NUM_THREADS)
+        .map(|thread_id| {
+            thread::spawn(move || {
+                // Use single sender per thread to avoid span ID conflicts
+                let (events_sender, events_receiver) = mpsc::sync_channel(512);
+                // Note: the test should fail with the `TracingEventSender::new()` constructor.
+                let sender = TracingEventSender::sync(move |event| {
+                    events_sender.send(event).unwrap();
+                });
+
+                tracing::subscriber::with_default(sender, || {
+                    // Mix of different span types to trigger more callsite registrations
+                    for i in 0..ITERATIONS {
+                        let _span = tracing::info_span!("stress_test", thread_id, iteration = i);
+                        tracing::debug!("stress test event");
+
+                        // Nested spans with different metadata
+                        let _nested = tracing::warn_span!("nested", value = i * 2);
+                        tracing::info!("nested event");
+                    }
+
+                    // Additional rapid span creation
+                    for i in 0..ITERATIONS {
+                        let _rapid = tracing::trace_span!("rapid", count = i);
+                        tracing::error!("rapid event {}", i);
+                    }
+                });
+
+                events_receiver.iter().collect()
+            })
+        })
+        .collect();
+
+    let all_events: Vec<Vec<TracingEvent>> = threads
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect();
+
+    // Validate each thread's events individually
+    for (thread_idx, events) in all_events.iter().enumerate() {
+        println!("thread_idx={thread_idx}");
+        assert_valid_refs(events);
+        assert_span_management(events);
+    }
+}
+
 fn assert_valid_refs(events: &[TracingEvent]) {
     let mut call_site_ids = HashSet::new();
     let mut span_ids = HashSet::new();
@@ -313,10 +371,21 @@ fn assert_valid_refs(events: &[TracingEvent]) {
                 id, metadata_id, ..
             } => {
                 assert!(span_ids.insert(*id));
-                assert!(call_site_ids.contains(metadata_id));
+                assert!(
+                    call_site_ids.contains(metadata_id),
+                    "NewSpan event references unknown metadata ID {metadata_id}: this may be indicative of a race condition \
+                     where NewSpan arrived before NewCallSite.\n\
+                     Events: {events:#?}\n\
+                     Call site IDs: {call_site_ids:#?}"
+                );
             }
             TracingEvent::NewEvent { metadata_id, .. } => {
-                assert!(call_site_ids.contains(metadata_id));
+                assert!(
+                    call_site_ids.contains(metadata_id),
+                    "NewEvent references unknown metadata ID {metadata_id}: this may be indicative of a race condition\n\
+                     Events: {events:#?}\n\
+                     Call site IDs: {call_site_ids:#?}"
+                );
             }
             _ => { /* do nothing */ }
         }
