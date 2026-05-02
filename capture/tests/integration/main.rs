@@ -5,11 +5,11 @@ use std::{borrow::Cow, panic, thread, time::Duration};
 use assert_matches::assert_matches;
 use predicates::ord::eq;
 use tracing_capture::{
-    predicates::{ancestor, field, level, message, name, parent, ScanExt},
     CaptureLayer, SharedStorage, Storage,
+    predicates::{ScanExt, ancestor, field, level, message, name, parent},
 };
 use tracing_core::{Level, LevelFilter};
-use tracing_subscriber::{layer::SubscriberExt, Registry};
+use tracing_subscriber::{Registry, layer::SubscriberExt};
 use tracing_tunnel::{
     CallSiteData, CallSiteKind, LocalSpans, TracedValue, TracedValues, TracingEvent,
     TracingEventReceiver, TracingLevel,

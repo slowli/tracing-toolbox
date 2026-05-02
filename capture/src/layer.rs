@@ -7,13 +7,13 @@ use std::{
 
 use id_arena::Arena;
 use tracing_core::{
-    span::{Attributes, Id, Record},
     Event, Metadata, Subscriber,
+    span::{Attributes, Id, Record},
 };
 use tracing_subscriber::{
+    Layer,
     layer::{Context, Filter},
     registry::LookupSpan,
-    Layer,
 };
 use tracing_tunnel::TracedValues;
 
@@ -236,7 +236,7 @@ where
     fn enabled(&self, metadata: &Metadata<'_>, ctx: &Context<'_, S>) -> bool {
         self.filter
             .as_deref()
-            .map_or(true, |filter| filter.enabled(metadata, ctx))
+            .is_none_or(|filter| filter.enabled(metadata, ctx))
     }
 
     fn lock(&self) -> impl ops::DerefMut<Target = Storage> + '_ {
@@ -269,7 +269,7 @@ where
         let span = ctx.span(id).unwrap();
         if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
             self.lock().on_record(id, TracedValues::from_record(values));
-        };
+        }
     }
 
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
@@ -290,21 +290,21 @@ where
         let span = ctx.span(id).unwrap();
         if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
             self.lock().on_span_enter(id);
-        };
+        }
     }
 
     fn on_exit(&self, id: &Id, ctx: Context<'_, S>) {
         let span = ctx.span(id).unwrap();
         if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
             self.lock().on_span_exit(id);
-        };
+        }
     }
 
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
         let span = ctx.span(&id).unwrap();
         if let Some(id) = span.extensions().get::<CapturedSpanId>().copied() {
             self.lock().on_span_closed(id);
-        };
+        }
     }
 
     fn on_follows_from(&self, id: &Id, follows_id: &Id, ctx: Context<'_, S>) {
@@ -314,6 +314,6 @@ where
             if let Some(follows_id) = follows.extensions().get::<CapturedSpanId>().copied() {
                 self.lock().on_follows_from(id, follows_id);
             }
-        };
+        }
     }
 }

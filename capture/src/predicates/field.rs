@@ -3,8 +3,8 @@
 use std::{any::type_name, borrow::Borrow, fmt, marker::PhantomData};
 
 use predicates::{
-    reflection::{Case, PredicateReflection, Product},
     Predicate,
+    reflection::{Case, PredicateReflection, Product},
 };
 use tracing_tunnel::{FromTracedValue, TracedValue};
 

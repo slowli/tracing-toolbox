@@ -3,8 +3,8 @@
 use std::{fmt, iter};
 
 use predicates::{
-    reflection::{Case, PredicateReflection, Product},
     Predicate,
+    reflection::{Case, PredicateReflection, Product},
 };
 
 use crate::{Captured, CapturedSpan};

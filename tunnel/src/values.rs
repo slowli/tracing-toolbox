@@ -3,19 +3,19 @@
 use core::{fmt, mem, ops, slice};
 
 use serde::{
+    Deserialize, Deserializer, Serialize, Serializer,
     de::{MapAccess, Visitor},
     ser::SerializeMap,
-    Deserialize, Deserializer, Serialize, Serializer,
 };
 use tracing_core::{
+    Event,
     field::{Field, ValueSet, Visit},
     span::Record,
-    Event,
 };
 
 use crate::{
-    alloc::{vec, String, Vec},
     TracedValue,
+    alloc::{String, Vec, vec},
 };
 
 /// Collection of named [`TracedValue`]s.

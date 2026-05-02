@@ -4,7 +4,7 @@ use core::{borrow::Borrow, fmt};
 
 use serde::{Deserialize, Serialize};
 
-use crate::alloc::{format, String, ToOwned};
+use crate::alloc::{String, ToOwned, format};
 
 #[cfg(feature = "std")]
 mod error {
