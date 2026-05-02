@@ -8,7 +8,7 @@ use predicates::{
     str::{ends_with, starts_with},
 };
 use tracing_core::{
-    callsite::DefaultCallsite, field::FieldSet, Kind, Level, LevelFilter, Metadata,
+    Kind, Level, LevelFilter, Metadata, callsite::DefaultCallsite, field::FieldSet,
 };
 use tracing_tunnel::{TracedValue, TracedValues};
 

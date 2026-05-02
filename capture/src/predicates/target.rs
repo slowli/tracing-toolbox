@@ -3,8 +3,8 @@
 use std::fmt;
 
 use predicates::{
-    reflection::{Case, PredicateReflection, Product},
     Predicate,
+    reflection::{Case, PredicateReflection, Product},
 };
 
 use crate::Captured;

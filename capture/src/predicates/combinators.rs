@@ -3,8 +3,8 @@
 use std::fmt;
 
 use predicates::{
-    reflection::{Case, PredicateReflection},
     Predicate,
+    reflection::{Case, PredicateReflection},
 };
 
 /// Boolean "and" combinator for predicates. Produced by the bitwise and (`&`) operator

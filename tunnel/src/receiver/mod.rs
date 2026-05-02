@@ -7,10 +7,10 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tracing_core::{
+    Event, Field, Metadata,
     dispatcher::{self, Dispatch},
     field::{self, FieldSet, Value, ValueSet},
     span::{Attributes, Id, Record},
-    Event, Field, Metadata,
 };
 
 use self::arena::ARENA;

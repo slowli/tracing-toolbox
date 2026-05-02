@@ -4,7 +4,7 @@ use std::{collections::HashSet, sync::Mutex};
 
 use tracing_core::Metadata;
 
-use super::{metadata_id, EventSync};
+use super::{EventSync, metadata_id};
 use crate::{CallSiteData, MetadataId, TracingEvent};
 
 /// Mutex-based [`EventSync`] implementation that can be used by [`TracingEventSender`](super::TracingEventSender).

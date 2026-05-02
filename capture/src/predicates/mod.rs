@@ -48,12 +48,12 @@ pub use self::{
     combinators::{And, Or},
     ext::{ScanExt, Scanner},
     field::{
-        field, message, value, FieldPredicate, IntoFieldPredicate, MessagePredicate, ValuePredicate,
+        FieldPredicate, IntoFieldPredicate, MessagePredicate, ValuePredicate, field, message, value,
     },
-    level::{level, IntoLevelPredicate, LevelPredicate},
-    name::{name, NamePredicate},
-    parent::{ancestor, parent, AncestorPredicate, ParentPredicate},
-    target::{target, IntoTargetPredicate, TargetPredicate},
+    level::{IntoLevelPredicate, LevelPredicate, level},
+    name::{NamePredicate, name},
+    parent::{AncestorPredicate, ParentPredicate, ancestor, parent},
+    target::{IntoTargetPredicate, TargetPredicate, target},
 };
 
 #[macro_use]

@@ -2,14 +2,13 @@
 
 use std::{
     borrow::Cow,
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
     ops,
-    sync::RwLock,
+    sync::{LazyLock, OnceLock, RwLock},
 };
 
-use once_cell::sync::{Lazy, OnceCell};
-use tracing_core::{field::FieldSet, Callsite, Interest, Kind, Level, Metadata};
+use tracing_core::{Callsite, Interest, Kind, Level, Metadata, field::FieldSet};
 
 use crate::types::{CallSiteData, CallSiteKind, TracingLevel};
 
@@ -40,7 +39,7 @@ impl From<CallSiteKind> for Kind {
 
 #[derive(Debug, Default)]
 struct DynamicCallSite {
-    metadata: OnceCell<&'static Metadata<'static>>,
+    metadata: OnceLock<&'static Metadata<'static>>,
 }
 
 impl Callsite for DynamicCallSite {
@@ -191,4 +190,4 @@ impl Arena {
     }
 }
 
-pub(crate) static ARENA: Lazy<Arena> = Lazy::new(Arena::default);
+pub(crate) static ARENA: LazyLock<Arena> = LazyLock::new(Arena::default);

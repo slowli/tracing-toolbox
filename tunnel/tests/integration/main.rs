@@ -4,14 +4,13 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     iter,
-    sync::mpsc,
+    sync::{LazyLock, mpsc},
     thread,
 };
 
 use assert_matches::assert_matches;
-use once_cell::sync::Lazy;
 use tracing_core::{Level, Subscriber};
-use tracing_subscriber::{registry::LookupSpan, FmtSubscriber};
+use tracing_subscriber::{FmtSubscriber, registry::LookupSpan};
 use tracing_tunnel::{
     CallSiteKind, LocalSpans, PersistedMetadata, PersistedSpans, TracedValue, TracingEvent,
     TracingEventReceiver, TracingEventSender, TracingLevel,
@@ -27,7 +26,7 @@ struct RecordedEvents {
 
 // **NB.** Tests calling the `fib` module should block on `EVENTS`; otherwise,
 // the snapshot tests may fail because of the differing ordering of `NewCallSite` events.
-static EVENTS: Lazy<RecordedEvents> = Lazy::new(|| RecordedEvents {
+static EVENTS: LazyLock<RecordedEvents> = LazyLock::new(|| RecordedEvents {
     short: fib::record_events(5),
     long: fib::record_events(80),
 });
@@ -271,7 +270,7 @@ fn persisting_spans_with_reset_local_spans() {
 #[test]
 #[allow(clippy::needless_collect)] // necessary for threads to be concurrent
 fn concurrent_senders() {
-    Lazy::force(&EVENTS);
+    LazyLock::force(&EVENTS);
 
     let threads: Vec<_> = (5..10)
         .map(|i| thread::spawn(move || fib::record_events(i)))
@@ -310,7 +309,7 @@ fn concurrent_senders_stress_test() {
     const NUM_THREADS: usize = 20;
     const ITERATIONS: usize = 10;
 
-    Lazy::force(&EVENTS);
+    LazyLock::force(&EVENTS);
 
     let threads: Vec<_> = (0..NUM_THREADS)
         .map(|thread_id| {

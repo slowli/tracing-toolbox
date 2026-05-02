@@ -1,10 +1,13 @@
 //! Client-side subscriber.
 
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::{
+    ptr,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use tracing_core::{
-    span::{Attributes, Id, Record},
     Event, Interest, Metadata, Subscriber,
+    span::{Attributes, Id, Record},
 };
 
 #[cfg(feature = "std")]
@@ -88,7 +91,7 @@ impl EventSync for () {
 }
 
 fn metadata_id(metadata: &'static Metadata<'static>) -> MetadataId {
-    metadata as *const _ as MetadataId
+    ptr::from_ref(metadata) as MetadataId
 }
 
 /// Tracing [`Subscriber`] that converts tracing events into (de)serializable [presentation]

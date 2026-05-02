@@ -23,8 +23,6 @@ maintenance = { status = "experimental" }
 # Public dependencies (present in the public API of the crate).
 serde = { workspace = true, features = ["alloc", "derive"] }
 tracing-core.workspace = true
-# Private dependencies.
-once_cell = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_matches.workspace = true
@@ -45,7 +43,7 @@ std = ["tracing-core/std"]
 # Enables `TracingEventSender`.
 sender = []
 # Enables `TracingEventReceiver` and closely related types.
-receiver = ["std", "once_cell"]
+receiver = ["std"]
 
 [[test]]
 name = "integration"

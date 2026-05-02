@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use tracing_core::{Level, Metadata};
 
 use crate::{
-    alloc::{BTreeMap, Cow, String, Vec},
     TracedValues,
+    alloc::{BTreeMap, Cow, String, Vec},
 };
 
 /// ID of a tracing [`Metadata`] record as used in [`TracingEvent`]s.
