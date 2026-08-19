@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["tracing_capture",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/exact_size/trait.ExactSizeIterator.html\" title=\"trait core::iter::traits::exact_size::ExactSizeIterator\">ExactSizeIterator</a> for <a class=\"struct\" href=\"tracing_capture/struct.CapturedEvents.html\" title=\"struct tracing_capture::CapturedEvents\">CapturedEvents</a>&lt;'_&gt;",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/exact_size/trait.ExactSizeIterator.html\" title=\"trait core::iter::traits::exact_size::ExactSizeIterator\">ExactSizeIterator</a> for <a class=\"struct\" href=\"tracing_capture/struct.CapturedSpans.html\" title=\"struct tracing_capture::CapturedSpans\">CapturedSpans</a>&lt;'_&gt;",0]]],["tracing_tunnel",[["impl&lt;S: <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/nightly/std/primitive.str.html\">str</a>&gt;&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/exact_size/trait.ExactSizeIterator.html\" title=\"trait core::iter::traits::exact_size::ExactSizeIterator\">ExactSizeIterator</a> for <a class=\"struct\" href=\"tracing_tunnel/struct.TracedValuesIter.html\" title=\"struct tracing_tunnel::TracedValuesIter\">TracedValuesIter</a>&lt;'_, S&gt;",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[762,653]}

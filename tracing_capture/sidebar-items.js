@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["predicates"],"struct":["CaptureLayer","CapturedEvent","CapturedEvents","CapturedSpan","CapturedSpans","DescendantEvents","DescendantSpans","SharedStorage","SpanStats","Storage"],"trait":["Captured"]};
